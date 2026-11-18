@@ -69,22 +69,23 @@ export function buildAss(words, config, duration) {
     playResX: 1080,
     playResY: 1920,
     font: 'Arial Black',
-    fontSize: 72,
+    fontSize: 76,
     wordsPerLine: 3,
     uppercase: true,
     highlight: '&H0000E5FF',
     emphasis: '&H0000FF55',
-    marginV: 360,
+    marginV: 680,
+    kinetic: true,
     ...config,
   };
   const groups = groupWords(words, { wordsPerLine: Math.min(3, c.wordsPerLine), maxChars: 16 });
 
   const creditStyle = c.attribution
-    ? `Style: Credit,${c.font},34,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,3,1,7,40,40,65,1\n`
+    ? `Style: Credit,${c.font},34,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,4,2,7,40,40,65,1\n`
     : '';
 
   const headerStyle = c.header
-    ? `Style: Header,${c.font},42,&H0000FFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,4,2,8,30,30,120,1\n`
+    ? `Style: Header,${c.font},44,&H0000FFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,5,3,8,30,30,120,1\n`
     : '';
 
   const header = `[Script Info]
@@ -96,7 +97,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,${c.font},${c.fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,6,3,5,50,50,${Number(c.marginV) || 680},1
+Style: Cap,${c.font},${c.fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,7,4,5,50,50,${Number(c.marginV) || 680},1
 ${creditStyle}${headerStyle}[Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;

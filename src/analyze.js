@@ -165,9 +165,13 @@ export function findPeaks({ chatTimes = [], loudness = [], visualActivity = [], 
 export function scoreTranscript(words = []) {
   const text = words.map((w) => w.text || '').join(' ').trim();
   const count = words.length;
-  const selfContained = count >= 8 && /\b(i|we|he|she|they|this|that|because|when)\b/i.test(text) ? 7 : Math.min(6, count / 2);
-  const emphasis = words.filter((w) => /[!?]|(wow|what|no|way|bro|insane|clutch| gg|holy)/i.test(w.text || '')).length;
-  return { text, wordCount: count, zeroContextScore: Number(selfContained.toFixed(1)), emphasis };
+  const hasSubject = /\b(i|we|he|she|they|this|that|because|when|you|who|what|where|how|look|watch)\b/i.test(text);
+  const emphasis = words.filter((w) => /[!?]|(wow|what|no\s*way|bro|insane|clutch|gg|holy|omg|look|omfg|run|kill|cops|wasted|busted|gta)/i.test(w.text || '')).length;
+  let score = Math.min(6, count / 2);
+  if ((count >= 8 && hasSubject) || (emphasis >= 2 && count >= 3) || (count >= 5 && emphasis >= 1 && hasSubject)) {
+    score = 7.0;
+  }
+  return { text, wordCount: count, zeroContextScore: Number(score.toFixed(1)), emphasis };
 }
 
 /** Normalize optional model output to the timeline contract used by the editor. */

@@ -124,6 +124,20 @@ export class Queue {
       this.update(job.id, { status: 'done', clipId: job.id });
       this.onLog(`clip ready clips/${job.id}.mp4`);
       this.onClip(meta);
+
+      if (this.config.youtube?.autoUpload || this.config.autoUpload) {
+        try {
+          const { youtubeConnected, uploadYoutubeClip } = await import('./youtube.js');
+          if (youtubeConnected()) {
+            const privacy = this.config.youtube?.privacyStatus || 'public';
+            this.onLog(`auto-uploading ${job.id} to YouTube (${privacy})...`);
+            const yt = await uploadYoutubeClip(job.id, { privacyStatus: privacy });
+            this.onLog(`UPLOADED ${job.id} to YouTube: ${yt.url}`);
+          }
+        } catch (uploadErr) {
+          this.onLog(`auto-upload failed for ${job.id}: ${uploadErr.message || uploadErr}`);
+        }
+      }
     } catch (err) {
       this.update(job.id, { status: 'failed', error: String(err.message || err).slice(0, 2000) });
       this.onLog(`FAILED ${job.id}: ${String(err.message || err).split('\n')[0]}`);

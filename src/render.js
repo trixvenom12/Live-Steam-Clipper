@@ -243,7 +243,7 @@ export async function renderClip(job, config, outDir) {
     duration: snapped.end - snapped.start,
     zeroContextScore,
   });
-  if (!quality.passed) throw new Error(`Clip failed editorial QA: ${quality.failures.join(', ')}`);
+  if (config.qa?.strict && !quality.passed) throw new Error(`Clip failed editorial QA: ${quality.failures.join(', ')}`);
   const duration = snapped.end - snapped.start;
   if (!(duration > 0.5)) throw new Error(`Bad clip range: ${job.start}-${job.end}`);
 

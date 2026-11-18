@@ -124,54 +124,80 @@ export function platformUrl(platform, channel) {
 
 export function buildYoutubeMetadata(clip, overrides = {}) {
   const channel = clip.channel || 'Streamer';
+  const cleanChannel = String(channel).replace(/^@+/, '').trim();
   const platform = (clip.platform || 'stream').toUpperCase();
-  const url = platformUrl(clip.platform, clip.channel);
-  const hook = String(overrides.title || clip.hook || clip.title || 'GTA 6 Hype Moment').trim();
+  const url = platformUrl(clip.platform, cleanChannel);
+  let rawHook = String(overrides.title || clip.hook || clip.title || 'GTA 6 Moment').trim();
+  rawHook = rawHook.replace(/<\|endoftext\|>/g, '').trim();
+  if (!rawHook || rawHook.length < 3) rawHook = `${cleanChannel} insane reaction`;
 
-  // YouTube TOS Title: Tag creator, max 100 characters
-  const tagSuffix = ` ft. @${channel} #Shorts #GTA6`;
+  // Format viral Title: Max 100 characters, includes Creator, Hook, GTA 6 & #Shorts
+  const titlePrefix = /\bgta\b/i.test(rawHook) ? rawHook : `GTA 6 • ${rawHook}`;
+  const tagSuffix = ` ft. @${cleanChannel} #Shorts`;
   const maxHookLen = Math.max(10, 100 - tagSuffix.length);
-  const cleanHook = hook.length > maxHookLen ? hook.slice(0, maxHookLen - 1) + '…' : hook;
+  const cleanHook = titlePrefix.length > maxHookLen ? titlePrefix.slice(0, maxHookLen - 1) + '…' : titlePrefix;
   const title = (overrides.title || `${cleanHook}${tagSuffix}`).slice(0, 100);
 
-  // YouTube TOS Description: Attribution, source broadcast link, fair use & DMCA disclaimer
+  // YouTube Description optimized for Algorithm Engagement, Creator Credit & SEO
   const defaultDesc = [
-    cleanHook,
+    `🔥 ${cleanHook}`,
     '',
     '💬 What would you do in this situation? Drop your thoughts below! 👇',
+    '🔔 Subscribe for daily GTA 6 clips, leaks, and top streamer highlights!',
     '',
-    `🎮 Original Creator: @${channel} (${platform})`,
-    url ? `🔴 Original Broadcast: ${url}` : '',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `🎮 Streamer: @${cleanChannel} (${platform})`,
+    url ? `🔴 Watch original broadcast: ${url}` : '',
+    `⭐ Game: Grand Theft Auto VI (Rockstar Games)`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     '',
-    'Support the original streamer by checking out their channel!',
-    '',
-    '⚖️ Fair Use & Copyright Notice:',
-    `This video is a transformative highlight created for commentary, criticism, and entertainment under Section 107 of the US Copyright Act. All rights and credits belong to @${channel} and the respective content owners.`,
+    '⚖️ Fair Use & DMCA Copyright Notice:',
+    `This video is a transformative highlight created under Section 107 of the US Copyright Act (Fair Use) for news, commentary, and entertainment purposes. All original broadcast rights belong to @${cleanChannel} and Rockstar Games.`,
     '',
     '📬 Content Removal / Takedown Request:',
-    'If you are the copyright owner and would like this video removed or credited differently, please contact us or leave a comment, and it will be taken down immediately.',
+    'If you are the copyright owner and want this clip removed or modified, please contact us or comment, and it will be taken down within 24 hours.',
     '',
-    `#GTA6 #GrandTheftAuto6 #Shorts #Gaming #${channel.replace(/[^\w]/g, '')} #${clip.platform || 'stream'}`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `#GTA6 #GrandTheftAutoVI #Shorts #Gaming #GTA6Gameplay #RockstarGames #ViceCity #GTAClips #${cleanChannel.replace(/[^\w]/g, '')}`,
   ].filter(Boolean).join('\n');
 
   const description = (overrides.description || defaultDesc).slice(0, 5000);
 
-  const defaultTags = [
-    channel,
-    `${channel} gta 6`,
-    `${channel} stream`,
-    `${channel} clips`,
+  // High-traffic GTA 6 + Streamer Tags (stay safely under YouTube 500-char limit)
+  const defaultTagList = [
     'GTA 6',
+    'GTA VI',
+    'Grand Theft Auto 6',
     'Grand Theft Auto VI',
     'GTA 6 gameplay',
-    'gaming',
-    'stream clips',
+    'GTA 6 clips',
+    'GTA 6 leak',
+    'GTA 6 trailer',
+    'GTA 6 funny moments',
+    'Vice City',
+    'Rockstar Games',
+    cleanChannel,
+    `${cleanChannel} gta 6`,
+    `${cleanChannel} clips`,
     'youtube shorts',
-  ].join(', ');
+    'gaming shorts',
+    'stream highlights',
+  ];
 
-  const tags = overrides.tags || defaultTags;
+  // Keep joined tags under 420 chars
+  let safeTags = [];
+  let charCount = 0;
+  for (const tag of defaultTagList) {
+    if (charCount + tag.length + 2 < 420) {
+      safeTags.push(tag);
+      charCount += tag.length + 2;
+    }
+  }
 
-  return { title, description, tags, privacyStatus: overrides.privacyStatus || 'private' };
+  const tags = overrides.tags || safeTags.join(', ');
+  const privacyStatus = overrides.privacyStatus || 'public';
+
+  return { title, description, tags, privacyStatus };
 }
 
 export async function uploadYoutubeClip(id, metadata = {}) {
@@ -190,7 +216,7 @@ export async function uploadYoutubeClip(id, metadata = {}) {
   if (!title || title.length > 100) throw new Error('Title is required and must be 100 characters or fewer.');
   if (description.length > 5000) throw new Error('Description must be 5,000 characters or fewer.');
   if (tags.join('').length > 500 || tags.length > 500) throw new Error('Tags exceed YouTube’s 500-character limit.');
-  const privacyStatus = ['private', 'unlisted', 'public'].includes(formatted.privacyStatus) ? formatted.privacyStatus : 'private';
+  const privacyStatus = ['private', 'unlisted', 'public'].includes(formatted.privacyStatus) ? formatted.privacyStatus : 'public';
   const token = await accessToken();
   const init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
     method: 'POST',
@@ -219,5 +245,18 @@ export async function uploadYoutubeClip(id, metadata = {}) {
   });
   const video = await result.json().catch(() => ({}));
   if (!result.ok) throw new Error(video.error?.message || `YouTube upload failed (HTTP ${result.status}).`);
+
+  // Persist upload info on clip metadata
+  try {
+    clip.youtube = {
+      id: video.id,
+      url: `https://youtu.be/${video.id}`,
+      uploadedAt: new Date().toISOString(),
+      privacyStatus,
+      title,
+    };
+    fs.writeFileSync(path.join(CLIPS, `${safeId}.json`), JSON.stringify(clip, null, 2));
+  } catch {}
+
   return { id: video.id, url: `https://youtu.be/${video.id}` };
 }

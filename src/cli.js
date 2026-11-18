@@ -304,20 +304,46 @@ async function main() {
     case 'upload': {
       const id = positional[0];
       if (!id) {
-        console.error('Usage: node src/cli.js upload <clip-id> [--title "..."] [--privacy private|unlisted|public]');
+        console.error('Usage: node src/cli.js upload <clip-id> [--title "..."] [--privacy public|unlisted|private]');
         process.exitCode = 1;
         return;
       }
       const { uploadYoutubeClip } = await import('./youtube.js');
-      const clipPath = path.join(CLIPS, `${id}.json`);
-      const clipMeta = readJson(clipPath, {});
-      const title = flags.title || clipMeta.title || `GTA 6 Hype Moment - ${clipMeta.channel || id}`;
-      const description = flags.description || `${clipMeta.hook || ''}\n\nCaptured with GTA Clipper\n#GTA6 #Shorts #Gaming`;
-      const tags = flags.tags || 'GTA6,GTA,Shorts,Gaming';
-      const privacyStatus = flags.privacy || 'private';
-      console.log(`Uploading ${id} to YouTube ("${title}")...`);
-      const res = await uploadYoutubeClip(id, { title, description, tags, privacyStatus });
+      const privacyStatus = flags.privacy || 'public';
+      const meta = { privacyStatus };
+      if (flags.title) meta.title = flags.title;
+      if (flags.description) meta.description = flags.description;
+      if (flags.tags) meta.tags = flags.tags;
+      console.log(`Uploading ${id} to YouTube (${privacyStatus})...`);
+      const res = await uploadYoutubeClip(id, meta);
       return log(`✓ Upload complete: ${res.url}`);
+    }
+    case 'upload-all': {
+      const { uploadYoutubeClip, youtubeConnected } = await import('./youtube.js');
+      if (!youtubeConnected()) {
+        console.error('YouTube is not connected. Connect your account in the UI or set up OAuth first.');
+        process.exitCode = 1;
+        return;
+      }
+      const { clips } = await import('./pipeline.js');
+      const all = clips().filter((c) => !c.youtube?.id && fs.existsSync(path.join(CLIPS, path.basename(c.file))));
+      const limit = Number(flags.limit) || 10;
+      const privacyStatus = flags.privacy || 'public';
+      console.log(`Found ${all.length} unuploaded clips. Uploading top ${Math.min(limit, all.length)} to YouTube (${privacyStatus})...`);
+      for (const clip of all.slice(0, limit)) {
+        try {
+          console.log(`\nUploading ${clip.id} (Score: ${clip.score}, Creator: ${clip.channel})...`);
+          const res = await uploadYoutubeClip(clip.id, { privacyStatus });
+          console.log(`✓ Upload complete: ${res.url}`);
+        } catch (err) {
+          console.error(`✗ Failed to upload ${clip.id}: ${err.message}`);
+          if (err.message.includes('quotaExceeded')) {
+            console.error('YouTube API quota reached for today.');
+            break;
+          }
+        }
+      }
+      return;
     }
     case 'perf': {
       const id = positional[0];
