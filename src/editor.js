@@ -2,6 +2,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CLIPS, ffmpegBin, assertMedia, readJson, writeJson, run } from './util.js';
 
+export function assembleTimeline(ranges, words = [], { silenceGap = 0.35 } = {}) {
+  const timeline = [];
+  for (const range of ranges || []) {
+    const inside = words.filter((w) => w.start >= range.start && w.start < range.end);
+    let cursor = range.start;
+    for (let i = 1; i < inside.length; i++) {
+      const gap = inside[i].start - inside[i - 1].end;
+      if (gap > silenceGap) {
+        const cut = Math.min(0.06, gap / 2);
+        if (inside[i - 1].end - cursor > 0.05) timeline.push({ start: cursor, end: inside[i - 1].end + cut, role: range.role });
+        cursor = Math.max(cursor, inside[i].start - cut);
+      }
+    }
+    if (range.end - cursor > 0.05) timeline.push({ start: cursor, end: range.end, role: range.role });
+  }
+  return timeline;
+}
+
 function clipFiles(id) {
   const safeId = path.basename(String(id));
   if (!safeId || safeId !== id) throw new Error('Invalid clip id.');

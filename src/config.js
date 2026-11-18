@@ -27,7 +27,7 @@ export const DEFAULTS = {
     bgmFile: null,
     bgmMode: 'ducking',
     bgmVolume: 0.25,
-    trimSilenceGap: 0.35,
+    trimSilenceGap: 0.65,
     hookV2: false,
   },
   captions: {

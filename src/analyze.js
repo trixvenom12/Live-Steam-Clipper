@@ -91,6 +91,10 @@ export function findPeaks({ chatTimes = [], loudness = [], visualActivity = [], 
     audio.fill(-45);
   }
   const audioZ = zScores(audio);
+  // Positive frame-to-frame RMS changes approximate attacks; this is not pitch
+  // detection, but it adds transient reactions without pretending to be one.
+  const audioDelta = Float64Array.from(audio, (v, i) => i ? Math.max(0, v - audio[i - 1]) : 0);
+  const audioDeltaZ = zScores(audioDelta);
 
   const visual = new Float64Array(seconds);
   for (const { t, motion = 0, scene = 0 } of visualActivity) {
@@ -102,8 +106,8 @@ export function findPeaks({ chatTimes = [], loudness = [], visualActivity = [], 
   const hasChat = chatTimes.length > 0;
   const rawScore = chatZ.map((z, i) =>
     hasChat
-      ? Math.max(0, z) + 0.5 * Math.max(0, audioZ[i]) + 0.5 * Math.max(0, visualZ[i])
-      : Math.max(0, audioZ[i]) + 0.5 * Math.max(0, visualZ[i])
+      ? Math.max(0, z) + 0.5 * Math.max(0, audioZ[i]) + 0.25 * Math.max(0, audioDeltaZ[i]) + 0.5 * Math.max(0, visualZ[i])
+      : Math.max(0, audioZ[i]) + 0.25 * Math.max(0, audioDeltaZ[i]) + 0.5 * Math.max(0, visualZ[i])
   );
   // chatZ is already a trailing-window average, so keep this light — a wide
   // window flattens real spikes below the threshold and nothing ever clips.
@@ -135,6 +139,7 @@ export function findPeaks({ chatTimes = [], loudness = [], visualActivity = [], 
       score: Number(score[i].toFixed(2)),
       chatZ: Number(chatZ[i].toFixed(2)),
       audioZ: Number(audioZ[i].toFixed(2)),
+      audioDeltaZ: Number(audioDeltaZ[i].toFixed(2)),
       visualZ: Number(visualZ[i].toFixed(2)),
       chatMessages: msgs,
       components: {
@@ -154,6 +159,33 @@ export function findPeaks({ chatTimes = [], loudness = [], visualActivity = [], 
     chosen.push(peak);
   }
   return chosen.sort((a, b) => a.at - b.at);
+}
+
+/** Transcript-only local signals; semantic/context judgments require an injected model. */
+export function scoreTranscript(words = []) {
+  const text = words.map((w) => w.text || '').join(' ').trim();
+  const count = words.length;
+  const selfContained = count >= 8 && /\b(i|we|he|she|they|this|that|because|when)\b/i.test(text) ? 7 : Math.min(6, count / 2);
+  const emphasis = words.filter((w) => /[!?]|(wow|what|no|way|bro|insane|clutch| gg|holy)/i.test(w.text || '')).length;
+  return { text, wordCount: count, zeroContextScore: Number(selfContained.toFixed(1)), emphasis };
+}
+
+/** Normalize optional model output to the timeline contract used by the editor. */
+export function normalizeMomentAnalysis(model, { start = 0, end, words = [] } = {}) {
+  const fallbackStart = words[0]?.start ?? start;
+  const fallbackEnd = words.at(-1)?.end ?? end;
+  const climaxStart = Number(model?.climax_start);
+  const climaxEnd = Number(model?.climax_end);
+  const setupStart = Number(model?.setup_start);
+  const hardCutEnd = Number(model?.hard_cut_end);
+  return {
+    setup_start: Number.isFinite(setupStart) ? setupStart : fallbackStart,
+    climax_start: Number.isFinite(climaxStart) ? climaxStart : Math.max(fallbackStart, fallbackEnd - 2),
+    climax_end: Number.isFinite(climaxEnd) ? climaxEnd : fallbackEnd,
+    hard_cut_end: Number.isFinite(hardCutEnd) ? hardCutEnd : fallbackEnd,
+    zeroContextScore: Number.isFinite(Number(model?.zeroContextScore)) ? Number(model.zeroContextScore) : null,
+    source: model ? 'model' : 'fallback',
+  };
 }
 
 /** Per-second RMS dB from a media file (1s windows at 8 kHz). */

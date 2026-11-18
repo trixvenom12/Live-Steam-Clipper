@@ -53,6 +53,12 @@ test('builds header banner and attribution events when specified', () => {
   assert.match(ass, /🔴 Stream: @xqc \(Twitch\)/);
 });
 
+test('caps caption lines and displays the hook banner for at most 3.5 seconds', () => {
+  const ass = buildAss([word('one', 0, 0.2)], { header: 'This is the hook', marginV: 680 }, 8);
+  assert.match(ass, /0:00:03\.50,Header/);
+  assert.match(ass, /,5,50,50,680,1/);
+});
+
 test('detects whisper repetition hallucination loops', () => {
   const loop = [
     word('thank', 0, 0.3), word('you', 0.3, 0.6),

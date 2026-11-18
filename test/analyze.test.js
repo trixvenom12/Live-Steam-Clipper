@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findPeaks, buildChatTimeline } from '../src/analyze.js';
+import { findPeaks, buildChatTimeline, normalizeMomentAnalysis, scoreTranscript } from '../src/analyze.js';
 
 function chatBurst(from, to, rate) {
   const times = [];
@@ -19,6 +19,14 @@ function flatLoudness(duration, db = -40) {
 test('chat timeline buckets by second', () => {
   const counts = buildChatTimeline([0.1, 0.9, 1.2, 2.9], 4);
   assert.deepEqual([...counts], [2, 1, 1, 0]);
+});
+
+test('normalizes model timestamps and computes a conservative local transcript score', () => {
+  const words = Array.from({ length: 10 }, (_, i) => ({ text: i ? 'because' : 'I', start: i, end: i + 0.4 }));
+  assert.equal(scoreTranscript(words).zeroContextScore, 7);
+  assert.deepEqual(normalizeMomentAnalysis({ setup_start: 1, climax_start: 7, climax_end: 9, hard_cut_end: 10 }, { words }), {
+    setup_start: 1, climax_start: 7, climax_end: 9, hard_cut_end: 10, zeroContextScore: null, source: 'model',
+  });
 });
 
 test('finds a chat spike and ignores a flat stream', () => {

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Queue } from '../src/pipeline.js';
+import { evaluateClipQuality } from '../src/qa.js';
 
 test('concurrent kick callers wait for the same queue drain', async () => {
   const queue = Object.create(Queue.prototype);
@@ -20,4 +21,14 @@ test('concurrent kick callers wait for the same queue drain', async () => {
   await second;
   assert.equal(jobs.length, 0);
   assert.equal(queue.busy, false);
+});
+
+test('editorial QA rejects low speech ratio, head silence, and weak context', () => {
+  const result = evaluateClipQuality({
+    duration: 10,
+    words: [{ start: 1, end: 2 }, { start: 5, end: 6 }],
+    zeroContextScore: 4,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.failures.length, 3);
 });

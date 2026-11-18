@@ -4,9 +4,11 @@ import path from 'node:path';
 import { run, ffmpegBin, ensureDir, probeDuration, assertMedia, clock } from './util.js';
 import { transcribe } from './transcribe.js';
 import { buildAss, presetCaptions } from './captions.js';
-import { makeHook } from './hook.js';
+import { makeHook, makeEditPlan } from './hook.js';
+import { evaluateClipQuality } from './qa.js';
 import { detectInset, detectFaceCenter } from './vision.js';
 import { detectBurnedSubtitles } from './burned.js';
+import { scoreTranscript } from './analyze.js';
 
 const FONT_DIR = '/System/Library/Fonts/Supplemental';
 const RATIO_DIMS = {
@@ -54,23 +56,52 @@ export function sourceOffset(source, clipStartSeconds) {
 }
 
 /**
- * Trim the padded window to where speech actually starts and stops, and rebase
- * word timings onto the new zero. Silence at the head is the most common reason
- * a clip feels like it started late.
+ * Trim the padded window to a natural sentence boundary where speech starts and stops,
+ * and rebase word timings onto the new zero.
  */
-export function snapToSpeech({ paddedStart, paddedEnd, transcript, minLength, maxLength }) {
+export function snapToSpeech({ paddedStart, paddedEnd, transcript, minLength = 15, maxLength = 30, preRoll = 4.0 }) {
   const words = transcript.words || [];
   if (!words.length) return { start: paddedStart, end: paddedEnd, words };
-  const first = words[0];
-  const last = words[words.length - 1];
 
-  let start = first.start > 0.7 ? paddedStart + Math.max(0, first.start - 0.2) : paddedStart;
-  let end = Math.min(paddedEnd, paddedStart + last.end + 0.45);
+  // Look for a clean sentence boundary before the event
+  let startIdx = 0;
+  for (let i = 1; i < words.length; i++) {
+    const prev = words[i - 1];
+    const curr = words[i];
+    const isPunct = /[.!?]$/.test(prev.text);
+    const isPause = curr.start - prev.end >= 0.4;
+    const isCapital = /^[A-Z]/.test(curr.text) && (isPause || curr.start - prev.end >= 0.25);
+    if ((isPunct || isPause || isCapital) && curr.start <= preRoll + 1.0) {
+      startIdx = i;
+    }
+  }
+
+  const startWord = words[startIdx];
+  let start = startWord.start > 0.7 ? paddedStart + Math.max(0, startWord.start - 0.2) : paddedStart;
+
+  // Look for a clean sentence boundary ending between minLength and maxLength
+  let endIdx = words.length - 1;
+  for (let j = startIdx + 1; j < words.length; j++) {
+    const w = words[j];
+    const dur = (paddedStart + w.end + 0.3) - start;
+    if (dur >= minLength && dur <= maxLength) {
+      if (/[.!?]$/.test(w.text) || (words[j + 1] && words[j + 1].start - w.end >= 0.4)) {
+        endIdx = j;
+        break;
+      }
+    } else if (dur > maxLength) {
+      break;
+    }
+  }
+
+  const endWord = words[endIdx];
+  let end = Math.min(paddedEnd, paddedStart + endWord.end + 0.45);
   if (end - start < minLength) end = Math.min(paddedEnd + 2, start + minLength);
   if (end - start > maxLength) end = start + maxLength;
   if (end <= start) return { start: paddedStart, end: paddedEnd, words };
 
   const shifted = words
+    .filter((w, idx) => idx >= startIdx && idx <= endIdx)
     .map((w) => ({ ...w, start: w.start - (start - paddedStart), end: w.end - (start - paddedStart) }))
     .filter((w) => w.end > 0 && w.start < end - start);
   return { start, end, words: shifted };
@@ -78,29 +109,30 @@ export function snapToSpeech({ paddedStart, paddedEnd, transcript, minLength, ma
 
 /**
  * Split the speech-aligned words into kept segments, cutting out long silences
- * (filler/dead air). Returns null when nothing would be removed, so the
- * caller can fall back to a single continuous render.
+ * (filler/dead air). Never drops short reactions ("NO WAY", screams).
  */
-export function keepSegments(words, { gap = 0.45, minSegment = 1.5 } = {}) {
+export function keepSegments(words, { gap = 0.65, minSegment = 0.2, pad = 0 } = {}) {
   if (!Array.isArray(words) || words.length < 2) return null;
   const sorted = [...words].filter((w) => Number.isFinite(w.start) && Number.isFinite(w.end))
     .sort((a, b) => a.start - b.start);
   if (sorted.length < 2) return null;
   const ranges = [];
-  let cur = { start: sorted[0].start, end: sorted[0].end };
+  let cur = { start: Math.max(0, sorted[0].start - pad), end: sorted[0].end + pad };
   for (let i = 1; i < sorted.length; i++) {
     const w = sorted[i];
-    if (w.start - cur.end > gap) {
+    const wStart = Math.max(0, w.start - pad);
+    const wEnd = w.end + pad;
+    if (wStart - cur.end > gap) {
       ranges.push(cur);
-      cur = { start: w.start, end: w.end };
+      cur = { start: wStart, end: wEnd };
     } else {
-      cur.end = Math.max(cur.end, w.end);
+      cur.end = Math.max(cur.end, wEnd);
     }
   }
   ranges.push(cur);
   const kept = ranges.filter((r) => r.end - r.start >= minSegment);
   if (kept.length <= 1) return null;
-  return kept.map((r) => ({ start: r.start, end: r.end }));
+  return kept.map((r) => ({ start: Number(r.start.toFixed(3)), end: Number(r.end.toFixed(3)) }));
 }
 
 /**
@@ -125,27 +157,30 @@ export function remapWords(words, segments) {
   return out;
 }
 
-function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 }, faceCenter = null) {
+function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 }, faceCenter = null, inLabel = '0:v') {
   if (inset) {
     const { x, y, w, h } = inset;
     return [
-      '[0:v]setpts=PTS-STARTPTS[v0]',
+      `[${inLabel}]setpts=PTS-STARTPTS[v0]`,
       '[v0]split=2[a][b]',
-      '[a]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080[top]',
-      `[b]crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=1080:840:force_original_aspect_ratio=increase,crop=1080:840[bot]`,
-      `[top][bot]vstack=inputs=2,${assFilter},setpts=PTS-STARTPTS[v]`,
+      `[a]crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=1080:672:force_original_aspect_ratio=increase,crop=1080:672[face]`,
+      '[b]scale=1080:1248:force_original_aspect_ratio=increase,crop=1080:1248[game]',
+      `[face][game]vstack=inputs=2,${assFilter},setpts=PTS-STARTPTS[v]`,
     ].join(';');
   }
   if (layout === 'crop' && faceCenter) {
-    const x = Math.max(0, Math.min(dims.w, Math.round(faceCenter.cx * dims.w - dims.w / 2)));
-    const y = Math.max(0, Math.min(dims.h, Math.round(faceCenter.cy * dims.h - dims.h / 2)));
-    return `[0:v]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},${assFilter},setpts=PTS-STARTPTS[v]`;
+    // When 16:9 source is scaled to dims.w:dims.h (increase), scaled width is dims.h * (16/9)
+    const scaledW = Math.round(dims.h * (16 / 9));
+    const maxCropX = Math.max(0, scaledW - dims.w);
+    const x = Math.max(0, Math.min(maxCropX, Math.round(faceCenter.cx * scaledW - dims.w / 2)));
+    const y = 0;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},${assFilter},setpts=PTS-STARTPTS[v]`;
   }
   if (layout === 'crop') {
-    return `[0:v]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},${assFilter},setpts=PTS-STARTPTS[v]`;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},${assFilter},setpts=PTS-STARTPTS[v]`;
   }
   return [
-    '[0:v]setpts=PTS-STARTPTS[v0]',
+    `[${inLabel}]setpts=PTS-STARTPTS[v0]`,
     '[v0]split=2[base][fg]',
     `[base]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},gblur=sigma=28,eq=brightness=-0.12[bg]`,
     `[fg]scale=${dims.w}:-2[wd]`,
@@ -201,6 +236,14 @@ export async function renderClip(job, config, outDir) {
     minLength,
     maxLength,
   });
+  const transcriptScore = scoreTranscript(snapped.words);
+  const zeroContextScore = job.moment?.zeroContextScore ?? transcriptScore.zeroContextScore;
+  const quality = evaluateClipQuality({
+    words: snapped.words,
+    duration: snapped.end - snapped.start,
+    zeroContextScore,
+  });
+  if (!quality.passed) throw new Error(`Clip failed editorial QA: ${quality.failures.join(', ')}`);
   const duration = snapped.end - snapped.start;
   if (!(duration > 0.5)) throw new Error(`Bad clip range: ${job.start}-${job.end}`);
 
@@ -251,7 +294,7 @@ export async function renderClip(job, config, outDir) {
 
   const smartEnabled = config.clip?.smartTrim !== false;
   const smartSegments = smartEnabled
-    ? keepSegments(snapped.words, { gap: config.clip?.trimSilenceGap ?? 0.35 })
+    ? keepSegments(snapped.words, { gap: config.clip?.trimSilenceGap ?? 0.65, minSegment: 0.2, pad: 0.08 })
     : null;
 
   let didSmart = false;
@@ -262,45 +305,31 @@ export async function renderClip(job, config, outDir) {
 
   if (smartSegments && smartSegments.length > 1) {
     try {
-      const segTsParts = [];
+      const targetDuration = Math.min(maxLength, smartSegments.reduce((n, s) => n + (s.end - s.start), 0));
+      const remappedWords = remapWords(snapped.words, smartSegments);
+      const assFile = path.join(dir, 'subs.ass');
+      fs.writeFileSync(assFile, buildAss(remappedWords, captions, targetDuration));
+      const assF = assFilterFor(assFile);
+
+      const vFilters = [];
+      const aFilters = [];
+      const concatIn = [];
       for (let i = 0; i < smartSegments.length; i++) {
         const seg = smartSegments[i];
-        const segDur = seg.end - seg.start;
-        const segWords = snapped.words
-          .filter((w) => w.start >= seg.start - 1e-9 && w.start < seg.end + 1e-9)
-          .map((w) => ({ ...w, start: w.start - seg.start, end: w.end - seg.start }));
-        const segAss = path.join(dir, `seg_${i}.ass`);
-        fs.writeFileSync(segAss, buildAss(segWords, captions, segDur));
-        const segAssFilter = assFilterFor(segAss);
-        const segFilter = buildVideoFilter(layout, inset, segAssFilter, dims, faceCenter);
-        const segTs = path.join(dir, `seg_${i}.ts`);
-        const segArgs = sourceArgs(job.source, sourceOffset(job.source, snapped.start + seg.start), segDur);
-        await run(ffmpegBin(), [
-          '-y', '-hide_banner', '-loglevel', 'error',
-          ...segArgs.args,
-          '-filter_complex', segFilter,
-          '-map', '[v]', '-map', '0:a?',
-          '-af', 'asetpts=PTS-STARTPTS',
-          ...stdEncode,
-          '-t', String(segDur),
-          '-f', 'mpegts', segTs,
-        ]);
-        assertMedia(segTs);
-        segTsParts.push(segTs);
+        vFilters.push(`[0:v]trim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},setpts=PTS-STARTPTS[vseg${i}]`);
+        aFilters.push(`[0:a]atrim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},asetpts=PTS-STARTPTS[aseg${i}]`);
+        concatIn.push(`[vseg${i}][aseg${i}]`);
       }
-      const concatTs = path.join(dir, 'smart.ts');
+      const concatFilter = `${concatIn.join('')}concat=n=${smartSegments.length}:v=1:a=1[vcat][acat]`;
+      const layoutFilter = buildVideoFilter(layout, inset, assF, dims, faceCenter, 'vcat');
+      const aFilter = '[acat]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11[a]';
+      const fullFilter = [...vFilters, ...aFilters, concatFilter, layoutFilter, aFilter].join(';');
+
       await run(ffmpegBin(), [
         '-y', '-hide_banner', '-loglevel', 'error',
-        '-i', `concat:${segTsParts.join('|')}`,
-        '-c', 'copy', concatTs,
-      ]);
-      assertMedia(concatTs);
-      const targetDuration = Math.min(maxLength, smartSegments.reduce((n, s) => n + (s.end - s.start), 0));
-      await run(ffmpegBin(), [
-        '-y', '-hide_banner', '-loglevel', 'error',
-        '-i', concatTs,
-        '-vf', 'setpts=PTS-STARTPTS',
-        '-af', 'asetpts=PTS-STARTPTS,loudnorm=I=-14:TP=-1.5:LRA=11',
+        ...finalArgs.args,
+        '-filter_complex', fullFilter,
+        '-map', '[v]', '-map', '[a]',
         ...stdEncode,
         '-t', String(targetDuration),
         '-movflags', '+faststart',
@@ -308,12 +337,12 @@ export async function renderClip(job, config, outDir) {
       ]);
       assertMedia(file);
       renderedDuration = targetDuration;
-      renderedWords = remapWords(snapped.words, smartSegments);
+      renderedWords = remappedWords;
       renderedStart = snapped.start + smartSegments[0].start;
       renderedEnd = snapped.start + smartSegments[smartSegments.length - 1].end;
       didSmart = true;
     } catch (err) {
-      console.error(`  ! smart trim failed, falling back: ${String(err.message || err).split('\n')[0]}`);
+      console.error(`  ! single-pass smart trim failed, falling back: ${String(err.message || err).split('\n')[0]}`);
     }
   }
 
@@ -321,14 +350,13 @@ export async function renderClip(job, config, outDir) {
     const assFile = path.join(dir, 'subs.ass');
     fs.writeFileSync(assFile, buildAss(snapped.words, captions, duration));
     const assF = assFilterFor(assFile);
-    const filter = buildVideoFilter(layout, inset, assF, dims, faceCenter);
+    const filter = buildVideoFilter(layout, inset, assF, dims, faceCenter, '0:v');
     const targetDuration = Math.min(maxLength, duration);
     await run(ffmpegBin(), [
       '-y', '-hide_banner', '-loglevel', 'error',
       ...finalArgs.args,
-      '-filter_complex', filter,
-      '-map', '[v]', '-map', '0:a?',
-      '-af', 'asetpts=PTS-STARTPTS,loudnorm=I=-14:TP=-1.5:LRA=11',
+      '-filter_complex', `${filter};[0:a]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11[a]`,
+      '-map', '[v]', '-map', '[a]',
       ...stdEncode,
       '-t', String(targetDuration),
       '-movflags', '+faststart',
@@ -394,5 +422,8 @@ export async function renderClip(job, config, outDir) {
     hook: makeHook(transcript.text),
     inset,
     burnedSubtitles: burned.hasBurned,
+    quality,
+    zeroContextScore,
+    editPlan: makeEditPlan(job.moment, { coldOpen: config.clip?.coldOpen !== false }),
   };
 }

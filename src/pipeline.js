@@ -86,11 +86,12 @@ export class Queue {
     this.onLog(`rendering ${job.id}`);
     try {
       const result = await renderClip(job, this.config, CLIPS);
-      let qa = null;
+        let qa = result.quality || null;
       try {
         const { technicalFloor } = await import('./qa.js');
-        qa = await technicalFloor(result.file);
-        if (qa?.warnings?.length) this.onLog(`qa: ${job.id} ${qa.warnings.join('; ')}`);
+          const technical = await technicalFloor(result.file);
+          qa = { ...qa, technical };
+          if (technical?.warnings?.length) this.onLog(`qa: ${job.id} ${technical.warnings.join('; ')}`);
       } catch {}
       const meta = {
         id: job.id,
@@ -98,6 +99,8 @@ export class Queue {
         channel: job.channel,
         title: job.title || '',
         hook: result.hook || '',
+        editPlan: result.editPlan || [],
+        zeroContextScore: result.zeroContextScore ?? null,
         sessionId: job.sessionId || null,
         source: job.source || null,
         score: job.score ?? null,

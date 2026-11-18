@@ -1,5 +1,17 @@
 import { run, ffmpegBin } from './util.js';
 
+export function evaluateClipQuality({ words = [], duration, zeroContextScore } = {}) {
+  const sorted = words.filter((w) => Number.isFinite(w.start) && Number.isFinite(w.end) && w.end > w.start);
+  const speechSeconds = sorted.reduce((sum, w) => sum + Math.max(0, w.end - w.start), 0);
+  const speechRatio = duration > 0 ? Math.min(1, speechSeconds / duration) : 0;
+  const deadAirStart = sorted.length ? Math.max(0, sorted[0].start) : duration;
+  const failures = [];
+  if (speechRatio < 0.45) failures.push('speech ratio below 45%');
+  if (deadAirStart > 0.8) failures.push('dead air at start exceeds 0.8s');
+  if (Number.isFinite(zeroContextScore) && zeroContextScore < 7) failures.push('zero-context score below 7/10');
+  return { speechRatio, deadAirStart, zeroContextScore: zeroContextScore ?? null, failures, passed: failures.length === 0 };
+}
+
 export async function technicalFloor(file) {
   const out = { lufs: null, truePeak: null, blackLevel: null, warnings: [] };
   try {
