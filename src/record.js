@@ -66,10 +66,10 @@ export class Recorder {
     const ffmpeg = ffmpegBin();
     const maxH = this.config.record.maxHeight || 1080;
 
-    const fragDir = ensureDir(path.join(ROOT, 'fragments'));
+    const fragDir = ensureDir(path.join(this.dir, 'fragments'));
     const ytdlpArgs = [
       '--no-warnings', '--no-playlist',
-      ...(this.platform === 'kick' ? [] : ['--live-from-start']),
+      ...(this.platform === 'twitch' ? ['--live-from-start'] : []),
       '-P', `temp:${fragDir}`,
       '-P', `home:${fragDir}`,
       '-f', `bv*[height<=${maxH}]+ba/b[height<=${maxH}]/b`,
@@ -85,6 +85,8 @@ export class Recorder {
       '-err_detect', 'ignore_err',
       '-fflags', '+genpts+discardcorrupt',
       '-i', 'pipe:0',
+      '-map', '0:v?',
+      '-map', '0:a?',
       '-c', 'copy',
       '-f', 'segment',
       '-segment_format', 'mpegts',

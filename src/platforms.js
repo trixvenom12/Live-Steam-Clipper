@@ -247,14 +247,30 @@ function youtubeChat(url, onMessage, onError) {
     });
   };
 
+  let activeFile = null;
   const tail = () => {
     if (closed) return;
-    const file = fs.existsSync(`${outBase}.live_chat.json`)
-      ? `${outBase}.live_chat.json`
-      : fs.existsSync(path.join(dir, 'chat.live_chat.json'))
-        ? path.join(dir, 'chat.live_chat.json')
-        : null;
+    const candidates = [
+      `${outBase}.live_chat.json`,
+      `${outBase}.live_chat.json.part`,
+      path.join(dir, 'chat.live_chat.json'),
+      path.join(dir, 'chat.live_chat.json.part'),
+    ];
+    let file = null;
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        file = c;
+        break;
+      }
+    }
     if (!file) return;
+    if (activeFile && activeFile !== file && !file.endsWith('.part')) {
+      if (!fs.existsSync(activeFile)) {
+        activeFile = file;
+      }
+    } else {
+      activeFile = file;
+    }
     const size = fs.statSync(file).size;
     if (size <= offset) return;
     const fd = fs.openSync(file, 'r');
