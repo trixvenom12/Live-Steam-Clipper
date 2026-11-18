@@ -138,6 +138,8 @@ export function buildYoutubeMetadata(clip, overrides = {}) {
   const defaultDesc = [
     cleanHook,
     '',
+    '💬 What would you do in this situation? Drop your thoughts below! 👇',
+    '',
     `🎮 Original Creator: @${channel} (${platform})`,
     url ? `🔴 Original Broadcast: ${url}` : '',
     '',

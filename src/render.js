@@ -163,8 +163,8 @@ function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 },
     return [
       `[${inLabel}]setpts=PTS-STARTPTS[v0]`,
       '[v0]split=2[a][b]',
-      `[a]crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=1080:672:force_original_aspect_ratio=increase,crop=1080:672[face]`,
-      '[b]scale=1080:1248:force_original_aspect_ratio=increase,crop=1080:1248[game]',
+      `[a]crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=1080:672:force_original_aspect_ratio=increase,crop=1080:672,eq=saturation=1.12:contrast=1.04[face]`,
+      '[b]scale=1080:1248:force_original_aspect_ratio=increase,crop=1080:1248,eq=saturation=1.12:contrast=1.04[game]',
       `[face][game]vstack=inputs=2,${assFilter},setpts=PTS-STARTPTS[v]`,
     ].join(';');
   }
@@ -174,16 +174,16 @@ function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 },
     const maxCropX = Math.max(0, scaledW - dims.w);
     const x = Math.max(0, Math.min(maxCropX, Math.round(faceCenter.cx * scaledW - dims.w / 2)));
     const y = 0;
-    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},${assFilter},setpts=PTS-STARTPTS[v]`;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},eq=saturation=1.12:contrast=1.04,${assFilter},setpts=PTS-STARTPTS[v]`;
   }
   if (layout === 'crop') {
-    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},${assFilter},setpts=PTS-STARTPTS[v]`;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},eq=saturation=1.12:contrast=1.04,${assFilter},setpts=PTS-STARTPTS[v]`;
   }
   return [
     `[${inLabel}]setpts=PTS-STARTPTS[v0]`,
     '[v0]split=2[base][fg]',
     `[base]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},gblur=sigma=28,eq=brightness=-0.12[bg]`,
-    `[fg]scale=${dims.w}:-2[wd]`,
+    `[fg]scale=${dims.w}:-2,eq=saturation=1.12:contrast=1.04[wd]`,
     `[bg][wd]overlay=(W-w)/2:(H-h)/2,${assFilter},setpts=PTS-STARTPTS[v]`,
   ].join(';');
 }
@@ -322,7 +322,7 @@ export async function renderClip(job, config, outDir) {
       }
       const concatFilter = `${concatIn.join('')}concat=n=${smartSegments.length}:v=1:a=1[vcat][acat]`;
       const layoutFilter = buildVideoFilter(layout, inset, assF, dims, faceCenter, 'vcat');
-      const aFilter = '[acat]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11[a]';
+      const aFilter = `[acat]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=out:st=${Math.max(0, targetDuration - 0.2).toFixed(2)}:d=0.2[a]`;
       const fullFilter = [...vFilters, ...aFilters, concatFilter, layoutFilter, aFilter].join(';');
 
       await run(ffmpegBin(), [
@@ -355,7 +355,7 @@ export async function renderClip(job, config, outDir) {
     await run(ffmpegBin(), [
       '-y', '-hide_banner', '-loglevel', 'error',
       ...finalArgs.args,
-      '-filter_complex', `${filter};[0:a]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11[a]`,
+      '-filter_complex', `${filter};[0:a]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=out:st=${Math.max(0, targetDuration - 0.2).toFixed(2)}:d=0.2[a]`,
       '-map', '[v]', '-map', '[a]',
       ...stdEncode,
       '-t', String(targetDuration),

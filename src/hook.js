@@ -24,16 +24,20 @@ export function makeHook(text, maxWords = 10) {
     .filter((s) => s.split(/\s+/).length >= 3);
   if (!sentences.length) return '';
 
+  const CURIOSITY = /\b(wait|did you|how did|no way|what did|look at|bro|why would|he really|watch this|they actually|omg|holy)\b/i;
+
   let best = sentences[0];
   let bestScore = -1;
   for (const sentence of sentences) {
     const words = sentence.split(/\s+/);
     const hype = words.filter(isHype).length;
+    const curiosity = CURIOSITY.test(sentence) ? 3 : 0;
+    const isQuestionOrExclaim = /[!?]$/.test(sentence) ? 2 : 0;
     const hasNumber = /\b\d+(?:[.,]\d+)?\b/.test(sentence);
     const hasQuote = /"[^"]{3,}"/.test(sentence) || /'[^']{3,}'/.test(sentence);
     const hasProper = words.some((w) => /^[A-Z][a-z]{2,}$/.test(w));
     const selfContained = (hasNumber ? 2 : 0) + (hasQuote ? 2 : 0) + (hasProper ? 1 : 0);
-    const score = hype * 3 + (sentence.match(/[!?]/g)?.length || 0) * 2 + Math.min(words.length, 12) / 12 + selfContained;
+    const score = hype * 3 + curiosity + isQuestionOrExclaim + (sentence.match(/[!?]/g)?.length || 0) * 2 + Math.min(words.length, 12) / 12 + selfContained;
     if (score > bestScore) {
       bestScore = score;
       best = sentence;

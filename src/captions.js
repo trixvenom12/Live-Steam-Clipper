@@ -106,7 +106,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     events.push(`Dialogue: 1,0:00:00.00,${assTime(duration)},Credit,,0,0,0,,{\\c&H00E5E5FF&\\alpha&H20&}🔴 Stream: ${escapeText(c.attribution)}`);
   }
   if (c.header && duration > 0) {
-    events.push(`Dialogue: 2,0:00:00.00,${assTime(Math.min(3.5, duration))},Header,,0,0,0,,{\\c&H0000E5FF&}“${escapeText(c.header.toUpperCase())}”`);
+    const headerDur = Math.min(3.5, duration);
+    events.push(`Dialogue: 2,0:00:00.00,${assTime(headerDur)},Header,,0,0,0,,{\\fscx112\\fscy112\\t(0,100,\\fscx100\\fscy100)\\c&H0000E5FF&}“${escapeText(c.header.toUpperCase())}”`);
   }
   for (let g = 0; g < groups.length; g++) {
     const group = groups[g];
