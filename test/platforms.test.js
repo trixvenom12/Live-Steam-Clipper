@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeSlug, platformUrl } from '../src/platforms.js';
+import { isGtaStream } from '../src/monitor.js';
+
+test('isGtaStream recognizes GTA titles, games, and descriptions', () => {
+  assert.equal(isGtaStream({ title: 'CARRYMINATI PLAYS GTA VI | NO PROMOTIONS' }), true);
+  assert.equal(isGtaStream({ title: '🔴PLAYING GTA 6 EARLY ACCESS GAMEPLAY' }), true);
+  assert.equal(isGtaStream({ title: 'Stream', description: '🔴[DROPS] GTA 6 EARLY ACCESS🔴' }), true);
+  assert.equal(isGtaStream({ title: 'Cruising in Vice City with Jason & Lucia' }), true);
+  assert.equal(isGtaStream({ title: 'Grand Theft Auto 6 Walkthrough' }), true);
+  assert.equal(isGtaStream({ title: 'Chill vibes chatting with chat', description: 'Talking about life' }), false);
+  assert.equal(isGtaStream({ title: 'Fortnite FNCS Finals Day 2' }), false);
+  assert.equal(isGtaStream(null), false);
+});
 
 test('normalizes a pasted Twitch URL to the channel handle', () => {
   assert.equal(normalizeSlug('twitch', 'https://www.twitch.tv/shanks_ttv'), 'shanks_ttv');

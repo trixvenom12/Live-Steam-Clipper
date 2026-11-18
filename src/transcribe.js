@@ -15,6 +15,7 @@ export async function transcribe(file, config) {
     '-f', file,
     '-l', config.whisper.language || 'en',
     '-t', String(config.whisper.threads || 6),
+    '--prompt', config.whisper.prompt || 'GTA 6, Grand Theft Auto VI, Vice City, Lucia, Jason, Leonida, Rockstar Games, FiveM, Oppressor, Wanted Level',
     '-ojf',
     '-of', outBase,
     '-np',

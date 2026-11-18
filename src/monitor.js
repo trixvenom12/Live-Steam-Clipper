@@ -2,6 +2,21 @@ import { probe } from './platforms.js';
 import { Recorder } from './record.js';
 
 /**
+ * Check if the stream title, description, game, or tags indicate a GTA stream.
+ */
+export function isGtaStream(info) {
+  if (!info) return false;
+  const text = [
+    info.title,
+    info.description,
+    info.game,
+    ...(info.tags || []),
+    ...(info.categories || []),
+  ].filter(Boolean).join(' ');
+  return /\b(gta(?:\s*(?:[56]|v|vi|online))?|grand\s*theft\s*auto(?:\s*(?:[56]|v|vi))?|vice\s*city|leonida|rockstar\s*games|fivem)\b/i.test(text);
+}
+
+/**
  * Poll channels, record while live, stop when the stream ends.
  * Start/stop-able so the dashboard (or the CLI) can control it.
  */
@@ -29,6 +44,9 @@ export class Monitor {
         try {
           const info = await probe(channel.platform, channel.slug);
           if (!info.live) continue;
+          if (this.config.filterGta !== false && !isGtaStream(info)) {
+            continue;
+          }
           this.onLog(`LIVE ${channel.platform}/${channel.slug}: ${info.title}`);
           const recorder = new Recorder({
             platform: channel.platform,
