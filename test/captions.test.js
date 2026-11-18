@@ -41,6 +41,18 @@ test('builds one highlight event per word and escapes braces', () => {
   assert.equal(events.length, 2);
 });
 
+test('builds header banner and attribution events when specified', () => {
+  const ass = buildAss(
+    [word('crazy', 0, 0.4)],
+    { header: 'Wait for it...', attribution: '@xqc (Twitch)' },
+    2,
+  );
+  assert.match(ass, /Style: Header/);
+  assert.match(ass, /Style: Credit/);
+  assert.match(ass, /WAIT FOR IT\.\.\./);
+  assert.match(ass, /🔴 Stream: @xqc \(Twitch\)/);
+});
+
 test('detects whisper repetition hallucination loops', () => {
   const loop = [
     word('thank', 0, 0.3), word('you', 0.3, 0.6),

@@ -227,7 +227,16 @@ export async function renderClip(job, config, outDir) {
   }
 
   const attribution = job.channel ? `@${job.channel}${job.platform ? ` (${job.platform.toUpperCase()})` : ''}` : undefined;
-  const captions = presetCaptions({ ...config.captions, playResX: dims.w, playResY: dims.h, attribution });
+  const hookHeader = (config.clip?.headerBanner !== false && transcript.text)
+    ? makeHook(transcript.text, 7)
+    : undefined;
+  const captions = presetCaptions({
+    ...config.captions,
+    playResX: dims.w,
+    playResY: dims.h,
+    attribution,
+    header: hookHeader,
+  });
   if (inset && !config.captions?.marginV) captions.marginV = 740;
   else if (inset && (captions.marginV === 900 || captions.marginV === 360)) captions.marginV = 740;
 
@@ -242,7 +251,7 @@ export async function renderClip(job, config, outDir) {
 
   const smartEnabled = config.clip?.smartTrim !== false;
   const smartSegments = smartEnabled
-    ? keepSegments(snapped.words, { gap: config.clip?.trimSilenceGap ?? 0.45 })
+    ? keepSegments(snapped.words, { gap: config.clip?.trimSilenceGap ?? 0.35 })
     : null;
 
   let didSmart = false;
