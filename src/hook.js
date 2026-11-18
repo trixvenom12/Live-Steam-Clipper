@@ -1,0 +1,46 @@
+import { isHype } from './captions.js';
+
+/**
+ * A one-line hook for the clip card / post caption, picked from the transcript.
+ * Deliberately dumb and free: score sentences by hype words and punctuation.
+ */
+/** Lightweight "hook density" per 1000 transcript words (AutoClip-style). */
+export function hookDensity(text) {
+  const words = String(text || '').split(/\\s+/).filter(Boolean);
+  const n = words.length || 1;
+  const numbers = (String(text).match(/\\b\\d+(?:[.,]\\d+)?\\b/g) || []).length;
+  const claims = (String(text).match(/\\b(is|are|was|were|means|proves|shows|because|therefore|actually|literally|never|always)\\b/gi) || []).length;
+  const stories = (String(text).match(/\\b(I|we|he|she|they|when|after|before|because)\\b/gi) || []).length;
+  return {
+    per1000: Math.round(((numbers + claims + stories) / n) * 1000),
+    numbers, claims, stories, words: n,
+  };
+}
+
+export function makeHook(text, maxWords = 10) {
+  const sentences = String(text || '')
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.split(/\s+/).length >= 3);
+  if (!sentences.length) return '';
+
+  let best = sentences[0];
+  let bestScore = -1;
+  for (const sentence of sentences) {
+    const words = sentence.split(/\s+/);
+    const hype = words.filter(isHype).length;
+    const hasNumber = /\\b\\d+(?:[.,]\\d+)?\\b/.test(sentence);
+    const hasQuote = /"[^"]{3,}"/.test(sentence) || /'[^']{3,}'/.test(sentence);
+    const hasProper = words.some((w) => /^[A-Z][a-z]{2,}$/.test(w));
+    const selfContained = (hasNumber ? 2 : 0) + (hasQuote ? 2 : 0) + (hasProper ? 1 : 0);
+    const score = hype * 3 + (sentence.match(/[!?]/g)?.length || 0) * 2 + Math.min(words.length, 12) / 12 + selfContained;
+    if (score > bestScore) {
+      bestScore = score;
+      best = sentence;
+    }
+  }
+
+  const words = best.split(/\s+/);
+  if (words.length <= maxWords && best.length <= 60) return best.replace(/[.!?]+$/, '');
+  return `${words.slice(0, maxWords).join(' ').replace(/[,.!?;:]$/, '')}…`;
+}

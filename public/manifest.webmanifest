@@ -1,0 +1,20 @@
+{
+  "name": "GTA Clipper",
+  "short_name": "Clipper",
+  "description": "Live stream clipping control center — record, score and cut vertical clips.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F5F1",
+  "theme_color": "#F4F5F1",
+  "categories": ["video", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

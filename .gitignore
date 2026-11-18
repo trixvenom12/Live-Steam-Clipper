@@ -1,0 +1,13 @@
+node_modules/
+.tools/
+models/
+data/
+clips/
+fragments/
+*.part
+--Frag*
+.env
+.opencode/
+*.log
+.DS_Store
+

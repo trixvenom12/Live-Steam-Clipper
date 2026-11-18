@@ -2,7 +2,8 @@
 
 Automated stream clipper for Twitch, Kick and YouTube. It watches a channel, records
 while it's live, finds the loud + hype moments from chat and audio, then cuts vertical
-9:16 clips with word-synced captions — locally, with no API keys and no upload.
+9:16 clips with word-synced captions locally. Optional YouTube uploads use your own
+Google OAuth credentials.
 
 ```
 yt-dlp ──► ffmpeg segmenter ──► chat + loudness scoring ──► whisper.cpp ──► ffmpeg
@@ -81,6 +82,42 @@ node src/cli.js ui --port 8080 --host 127.0.0.1
 ```
 
 The token lives in `data/ui-token`. Delete it while the server is stopped to rotate it.
+
+### YouTube uploads
+
+The Clips gallery and clip player have an **Upload** button. It suggests a short title,
+description and tags from the clip; review/edit them before posting. Uploads default to
+**Private** and use YouTube's Gaming category. OAuth refresh credentials stay in
+`data/youtube-token.json`.
+
+#### One-time Google API setup
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create/select a project.
+2. In **APIs & Services → Library**, enable **YouTube Data API v3**.
+3. In **Google Auth platform → Branding**, set an app name and support email. Configure
+   **Audience**; if External and still in Testing, add your Google account as a test user.
+   Testing-mode refresh tokens for this YouTube scope can expire after 7 days.
+   Google may also restrict uploads from unverified API projects to Private until the
+   project completes YouTube's API compliance audit.
+4. In **Google Auth platform → Clients**, create an OAuth client ID with application
+   type **Web application**. Add this exact authorized redirect URI:
+   `http://localhost:4321/api/youtube/callback`
+5. Copy the client ID and secret. In Terminal, from this project folder, set them and
+   start the dashboard:
+
+   ```bash
+   export YOUTUBE_CLIENT_ID='paste-client-id'
+   export YOUTUBE_CLIENT_SECRET='paste-client-secret'
+   node src/cli.js ui
+   ```
+
+6. In the Clips tab, choose **Upload → Connect YouTube account**, approve access, then
+   return to the app. Choose visibility and press **Upload video**. Keep the dashboard
+   running until the upload finishes.
+
+For a non-default dashboard port, also register
+`http://localhost:<port>/api/youtube/callback` in Google Cloud and start the UI on that
+same port. Never commit OAuth secrets or `data/youtube-token.json`.
 
 ## How a live session works
 

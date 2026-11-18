@@ -1,0 +1,16 @@
+{
+  "name": "gta-clipper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Automated stream clipper: watches Twitch/Kick/YouTube, finds hype moments from chat + audio, cuts vertical clips with word-synced captions.",
+  "bin": { "clipper": "./src/cli.js" },
+  "scripts": {
+    "start": "node src/cli.js ui",
+    "watch": "node src/cli.js watch",
+    "setup": "node src/cli.js setup",
+    "doctor": "node src/cli.js doctor",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=22" }
+}

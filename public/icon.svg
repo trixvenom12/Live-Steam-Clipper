@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GTA Clipper">
+  <rect width="512" height="512" rx="112" fill="#F4F5F1"/>
+  <rect x="168" y="96" width="176" height="320" rx="38" fill="#FFFFFF" stroke="#365D46" stroke-width="22"/>
+  <path d="M230 196v120l96-60z" fill="#365D46"/>
+  <rect x="206" y="440" width="100" height="12" rx="6" fill="#365D46" opacity="0.75"/>
+</svg>
