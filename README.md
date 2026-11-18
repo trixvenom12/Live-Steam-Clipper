@@ -179,3 +179,4 @@ AutoClip and Opus Clip. Borrowed ideas: webcam-inset framing and speaker/layout 
 (AutoClip), multi-format reframing and brand templates (Opus). Deliberately not borrowed:
 cloud LLM moment picking — the local chat+audio signal needs no key and costs nothing.
 # Live-Steam-Clipper
+# Live-Steam-Clipper
