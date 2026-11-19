@@ -1,8 +1,54 @@
 import fs from 'node:fs/promises';
-import { run, findBin, assertMedia, projectPath } from './util.js';
+import exists from 'node:fs';
+import path from 'node:path';
+import { run, findBin, assertMedia, projectPath, ROOT } from './util.js';
+
+const PYTHON_BIN = path.join(ROOT, '.venv', 'bin', 'python');
+const FASTER_WHISPER_SCRIPT = path.join(ROOT, 'scripts', 'transcribe_faster_whisper.py');
+
+/**
+ * Check if the faster-whisper environment is installed and available.
+ */
+export function isFasterWhisperAvailable() {
+  return exists.existsSync(PYTHON_BIN) && exists.existsSync(FASTER_WHISPER_SCRIPT);
+}
+
+/**
+ * Word-level transcript from a media file via faster-whisper (Silero VAD + MPS/CPU).
+ */
+export async function transcribeFasterWhisper(file, config = {}) {
+  assertMedia(file);
+  if (!isFasterWhisperAvailable()) {
+    throw new Error('faster-whisper environment not found in .venv');
+  }
+
+  const modelSize = config?.whisper?.modelSize || 'small.en';
+  const { stdout } = await run(PYTHON_BIN, [FASTER_WHISPER_SCRIPT, file, modelSize], { allowFail: true });
+  
+  // Extract JSON from output
+  const jsonMatch = stdout.trim().match(/\{[\s\S]*\}$/);
+  if (!jsonMatch) {
+    throw new Error('faster-whisper returned non-JSON output');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  if (parsed.error) {
+    throw new Error(parsed.error);
+  }
+
+  const words = Array.isArray(parsed.words) ? parsed.words : [];
+  if (isHallucination(words)) {
+    return { text: '', words: [] };
+  }
+
+  return {
+    text: String(parsed.text || '').trim(),
+    words,
+  };
+}
 
 /** Word-level transcript from a media file via whisper.cpp. */
-export async function transcribe(file, config) {
+export async function transcribeWhisperCpp(file, config) {
   assertMedia(file);
   const bin = findBin('whisper-cli') || findBin('main');
   if (!bin) throw new Error('whisper-cli not found. Run: npm run setup');
@@ -26,6 +72,23 @@ export async function transcribe(file, config) {
 
   const json = JSON.parse(await fs.readFile(`${outBase}.json`, 'utf8'));
   return parseWhisperJson(json);
+}
+
+/**
+ * Primary transcribe entrypoint: supports faster-whisper or whisper.cpp based on config.
+ */
+export async function transcribe(file, config = {}) {
+  const engine = config?.whisper?.engine || 'whisper.cpp';
+
+  if (engine === 'faster-whisper') {
+    try {
+      return await transcribeFasterWhisper(file, config);
+    } catch (err) {
+      console.warn(`  ! faster-whisper failed (${err.message.split('\n')[0]}), falling back to whisper.cpp`);
+    }
+  }
+
+  return await transcribeWhisperCpp(file, config);
 }
 
 export function isHallucination(words) {

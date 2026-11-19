@@ -9,6 +9,7 @@ import { evaluateClipQuality } from './qa.js';
 import { detectInset, detectFaceCenter } from './vision.js';
 import { detectBurnedSubtitles } from './burned.js';
 import { scoreTranscript } from './analyze.js';
+import { findSceneCuts, snapToNearestSceneCut } from './scene.js';
 
 const FONT_DIR = '/System/Library/Fonts/Supplemental';
 const RATIO_DIMS = {
@@ -380,6 +381,13 @@ export async function renderClip(job, config, outDir) {
     console.error(`  ! exact clip audio transcription fallback: ${tErr.message.split('\n')[0]}`);
   }
 
+  // --- PySceneDetect Visual Cut Analysis ---
+  let sceneCuts = [];
+  try {
+    const sceneInfo = await findSceneCuts(baseFile);
+    sceneCuts = sceneInfo.cuts || [];
+  } catch {}
+
   // Burn captions onto the base video
   const assFile = path.join(dir, 'subs.ass');
   fs.writeFileSync(assFile, buildAss(exactWords, captions, renderedDuration));
@@ -451,6 +459,7 @@ export async function renderClip(job, config, outDir) {
     burnedSubtitles: burned.hasBurned,
     quality,
     zeroContextScore,
+    sceneCuts,
     editPlan: makeEditPlan(job.moment, { coldOpen: config.clip?.coldOpen !== false }),
   };
 }
