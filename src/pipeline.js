@@ -129,10 +129,21 @@ export class Queue {
         try {
           const { youtubeConnected, uploadYoutubeClip } = await import('./youtube.js');
           if (youtubeConnected()) {
-            const privacy = this.config.youtube?.privacyStatus || 'public';
-            this.onLog(`auto-uploading ${job.id} to YouTube (${privacy})...`);
-            const yt = await uploadYoutubeClip(job.id, { privacyStatus: privacy });
-            this.onLog(`UPLOADED ${job.id} to YouTube: ${yt.url}`);
+            const minGapMinutes = Number(this.config.youtube?.minUploadGapMinutes ?? 45);
+            const uploadTrackerFile = path.join(DATA, 'last-youtube-upload.json');
+            const lastUploadMeta = readJson(uploadTrackerFile, { lastUploadedAt: 0 });
+            const elapsedMinutes = (Date.now() - new Date(lastUploadMeta.lastUploadedAt || 0).getTime()) / 60000;
+
+            if (elapsedMinutes < minGapMinutes) {
+              const waitMins = Math.round(minGapMinutes - elapsedMinutes);
+              this.onLog(`auto-upload paced: ${job.id} queued (waiting ${waitMins}m to avoid YouTube spam flag)`);
+            } else {
+              const privacy = this.config.youtube?.privacyStatus || 'public';
+              this.onLog(`auto-uploading ${job.id} to YouTube (${privacy})...`);
+              const yt = await uploadYoutubeClip(job.id, { privacyStatus: privacy });
+              writeJson(uploadTrackerFile, { lastUploadedAt: new Date().toISOString(), clipId: job.id, url: yt.url });
+              this.onLog(`UPLOADED ${job.id} to YouTube: ${yt.url}`);
+            }
           }
         } catch (uploadErr) {
           this.onLog(`auto-upload failed for ${job.id}: ${uploadErr.message || uploadErr}`);

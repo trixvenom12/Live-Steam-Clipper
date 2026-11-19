@@ -109,7 +109,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   }
   if (c.header && duration > 0) {
     const headerDur = Math.min(3.5, duration);
-    const rawHeader = c.header.trim();
+    let rawHeader = c.header.trim();
+    if (/^[",]/.test(rawHeader)) rawHeader = rawHeader.replace(/^[",\s]+/, '');
+    if (/["]$/.test(rawHeader)) rawHeader = rawHeader.replace(/["]+$/, '');
+    if (/\b\d{4}-\d{2}-\d{2}\b/i.test(rawHeader) || /^\(?live\)?/i.test(rawHeader) || rawHeader.length < 3) {
+      rawHeader = 'WAIT FOR IT 💀';
+    }
     const gtaHeader = /\bgta\b/i.test(rawHeader)
       ? rawHeader.toUpperCase()
       : `GTA 6 • ${rawHeader.toUpperCase()}`;

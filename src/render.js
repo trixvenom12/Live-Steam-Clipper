@@ -207,8 +207,8 @@ export async function renderClip(job, config, outDir) {
   const base = job.source.kind === 'file' ? 0 : Math.min(...job.source.segments.map((s) => s.startMs)) / 1000;
   const maxAbsEnd = base + sourceDuration;
   // Generous pad: we trim it back to the actual first/last word.
-  const paddedStart = Math.max(base, job.start - 2.5);
-  const paddedEnd = Math.min(maxAbsEnd || Infinity, job.end + 1.8);
+  const paddedStart = Math.max(base, job.start - 1.2);
+  const paddedEnd = Math.min(maxAbsEnd || Infinity, job.end + 1.2);
   const paddedArgs = sourceArgs(job.source, sourceOffset(job.source, paddedStart), paddedEnd - paddedStart);
 
   const audioFile = path.join(dir, 'audio.wav');
