@@ -124,18 +124,19 @@ class Scheduler:
             limit=20
         )
 
-        # Sort Twitch streams: preferred English creators first (KaiCenat, Jynxzi, etc.)
-        preferred_names = ["kaicenat", "jynxzi", "stableronaldo", "xqcow", "ohnepixel", "theburntpeanut", "zackrawrr"]
+        # Target creators: IShowSpeed, ohnePixel, N3on, Adin Ross
+        target_streamers = ["ishowspeed", "speed", "ohnepixel", "n3on", "adinross", "adin"]
         def twitch_priority(s):
             login = (s.get("user_login") or s.get("user_name", "")).lower()
-            prio = 50 if any(p in login for p in preferred_names) else 0
-            if s.get("is_uk_likely"):
-                prio += 20
+            prio = 50 if any(p in login for p in target_streamers) else 0
             return (prio, s.get("viewer_count", 0))
 
         live_streams.sort(key=twitch_priority, reverse=True)
+        # Prioritize target creators strictly
+        target_matches = [s for s in live_streams if any(p in (s.get("user_login") or s.get("user_name", "")).lower() for p in target_streamers)]
+        streams_to_queue = target_matches if target_matches else live_streams
 
-        for s in live_streams:
+        for s in streams_to_queue:
             channel_name = s.get("user_name", "Streamer")
             channel_login = s.get("user_login") or channel_name.lower().replace(" ", "")
             stream_queue.append({

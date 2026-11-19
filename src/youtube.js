@@ -193,8 +193,37 @@ export function generateViralShortsTitle(clip, cleanChannel, rawHook = '') {
       `${creator}'s Funniest Death in GTA 6 😭`,
     );
   }
-  // 5. General relatable streamer reactions
-  else {
+  // 5. Creator-specific viral reactions for top 4 streamers
+  const lowerCh = cleanChannel.toLowerCase();
+  if (lowerCh.includes('speed')) {
+    candidates.push(
+      `${creator} BARKING AT GTA 6 COPS 💀`,
+      `${creator} ALMOST BROKE HIS SETUP IN GTA 6 😭`,
+      `${creator} Did NOT Expect That In GTA 6 🤯`,
+      `The Most UNHINGED GTA 6 Reaction Ever 😭 ft. ${creator}`,
+    );
+  } else if (lowerCh.includes('ohne')) {
+    candidates.push(
+      `${creator} Lost His Mind At This GTA 6 Moment 😭`,
+      `The Most UNHINGED GTA 6 Reaction Ever 😭 ft. ${creator}`,
+      `${creator} CANNOT BELIEVE THIS in GTA 6 💀`,
+      `Rockstar Cooked With This Detail (${creator}) 🤯`,
+    );
+  } else if (lowerCh.includes('n3on')) {
+    candidates.push(
+      `${creator} Got Pressed By GTA 6 Police 😭`,
+      `${creator} Trying To Escape The GTA 6 Cops 💀`,
+      `This GTA 6 NPC Had Beef With ${creator} 💀`,
+      `${creator} Was NOT Ready For GTA 6 Realism 💀`,
+    );
+  } else if (lowerCh.includes('adin')) {
+    candidates.push(
+      `${creator} Lost His Mind in GTA 6 💀`,
+      `${creator} vs The Most INSANE GTA 6 Police Chase 😭`,
+      `Instant Regret in GTA 6 For ${creator} 💀`,
+      `POV: ${creator} Playing GTA 6 For The First Time 😭`,
+    );
+  } else {
     candidates.push(
       `POV: ${creator} Playing GTA 6 For The First Time 😭`,
       `${creator} Lost His Mind At This GTA 6 Moment 😭`,

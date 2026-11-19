@@ -40,10 +40,16 @@ export class Queue {
 
       if (elapsedMinutes < minGapMinutes) return;
 
+      const allowedSlugs = (this.config.channels || []).map((c) => String(c.slug || '').toLowerCase().replace(/^@+/, '').trim());
       const files = fs.readdirSync(CLIPS).filter((f) => f.endsWith('.json') && !f.endsWith('.whisper.json'));
       const candidates = files
         .map((f) => readJson(path.join(CLIPS, f), null))
         .filter((c) => c && c.file && fs.existsSync(path.join(CLIPS, c.file)) && !c.youtube?.id)
+        .filter((c) => {
+          if (!allowedSlugs.length) return true;
+          const ch = String(c.channel || '').toLowerCase().replace(/^@+/, '').trim();
+          return allowedSlugs.some((s) => s && (ch === s || ch.includes(s) || s.includes(ch)));
+        })
         .sort((a, b) => (b.score || b.virality?.score || 0) - (a.score || a.virality?.score || 0));
 
       if (!candidates.length) return;
