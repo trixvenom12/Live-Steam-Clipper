@@ -97,39 +97,56 @@ class VODDownloader:
         output_path = os.path.join(self.download_dir, output_filename)
         ts_output = output_path.replace(".mp4", ".ts")
 
-        # Streamlink command capturing live stream
-        hls_dur = self._seconds_to_hms(duration_seconds)
-        cmd = [
-            self.python_bin, "-m", "streamlink",
-            stream_url,
-            "best",
-            "--stream-segmented-duration", hls_dur,
-            "-o", ts_output
+        # Resolve stream URL via streamlink or yt-dlp
+        stream_m3u8 = None
+        try:
+            sl_res = subprocess.run(
+                [self.python_bin, "-m", "streamlink", "--stream-url", stream_url, "best"],
+                capture_output=True, text=True, timeout=25
+            )
+            for line in sl_res.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("http://") or line.startswith("https://"):
+                    stream_m3u8 = line
+                    break
+        except Exception:
+            pass
+
+        if not stream_m3u8:
+            try:
+                yt_res = subprocess.run(
+                    [self.python_bin, "-m", "yt_dlp", "-g", stream_url],
+                    capture_output=True, text=True, timeout=25
+                )
+                for line in yt_res.stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith("http://") or line.startswith("https://"):
+                        stream_m3u8 = line
+                        break
+            except Exception:
+                pass
+
+        if not stream_m3u8:
+            logger.warning("Could not resolve stream URL for %s", stream_url)
+            return None
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
+            "-i", stream_m3u8,
+            "-t", str(duration_seconds),
+            "-c:v", "copy", "-c:a", "copy",
+            "-avoid_negative_ts", "make_zero",
+            output_path
         ]
 
         try:
-            logger.info("Capturing live stream (%s) for %ds: %s", stream_url, int(duration_seconds), " ".join(cmd))
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=int(duration_seconds) + 60)
-            if os.path.exists(ts_output) and os.path.getsize(ts_output) > 1024 * 100:
-                # Fast convert TS to MP4 with stream copy
-                ffmpeg_cmd = [
-                    "ffmpeg", "-y", "-i", ts_output,
-                    "-c:v", "copy", "-c:a", "copy",
-                    "-avoid_negative_ts", "make_zero",
-                    output_path
-                ]
-                subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-                if os.path.exists(ts_output):
-                    try:
-                        os.remove(ts_output)
-                    except Exception:
-                        pass
-
-                if os.path.exists(output_path) and os.path.getsize(output_path) > 1024 * 100:
-                    logger.info("Live capture successful: %s (%.2f MB)", output_path, os.path.getsize(output_path) / (1024 * 1024))
-                    return output_path
+            logger.info("Capturing live stream (%s) for %ds via ffmpeg", stream_url, int(duration_seconds))
+            subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=int(duration_seconds) + 60)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024 * 100:
+                logger.info("Live capture successful: %s (%.2f MB)", output_path, os.path.getsize(output_path) / (1024 * 1024))
+                return output_path
             else:
-                logger.warning("Streamlink live capture ended without sufficient data. Stderr: %s", res.stderr[:200])
+                logger.warning("Live capture produced empty or undersized file for %s", stream_url)
         except Exception as e:
             logger.error("Live capture error: %s", e)
 

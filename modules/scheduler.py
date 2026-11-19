@@ -24,6 +24,7 @@ class Scheduler:
         poll_interval_seconds: int = 60,
         live_capture_duration_seconds: float = 180.0,
         max_clips_per_capture: int = 1,
+        max_clips_per_vod: Optional[int] = None,
         max_daily_uploads: int = 15,
         min_upload_gap_seconds: int = 480,   # 8 minutes
         max_upload_gap_seconds: int = 600,   # 10 minutes
@@ -35,7 +36,7 @@ class Scheduler:
     ):
         self.poll_interval_seconds = poll_interval_seconds
         self.live_capture_duration_seconds = live_capture_duration_seconds
-        self.max_clips_per_capture = max_clips_per_capture
+        self.max_clips_per_capture = max_clips_per_vod if max_clips_per_vod is not None else max_clips_per_capture
         self.max_daily_uploads = max_daily_uploads
         self.min_upload_gap_seconds = min_upload_gap_seconds
         self.max_upload_gap_seconds = max_upload_gap_seconds
