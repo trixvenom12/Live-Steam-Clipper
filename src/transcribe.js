@@ -10,16 +10,19 @@ export async function transcribe(file, config) {
   const model = projectPath(config.whisper.model);
 
   const outBase = file.replace(/\.[^.]+$/, '') + '.whisper';
-  await run(bin, [
+  const args = [
     '-m', model,
     '-f', file,
-    '-l', config.whisper.language || 'en',
-    '-t', String(config.whisper.threads || 6),
-    '--prompt', config.whisper.prompt || 'GTA 6, Grand Theft Auto VI, Vice City, Lucia, Jason, Leonida, Rockstar Games, FiveM, Oppressor, Wanted Level',
+    '-l', config?.whisper?.language || 'en',
+    '-t', String(config?.whisper?.threads || 6),
     '-ojf',
     '-of', outBase,
     '-np',
-  ]);
+  ];
+  if (config?.whisper?.prompt) {
+    args.push('--prompt', config.whisper.prompt);
+  }
+  await run(bin, args);
 
   const json = JSON.parse(await fs.readFile(`${outBase}.json`, 'utf8'));
   return parseWhisperJson(json);
