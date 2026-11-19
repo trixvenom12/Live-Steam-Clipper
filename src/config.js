@@ -42,6 +42,13 @@ export const DEFAULTS = {
     marginV: 360,
   },
   whisper: { model: 'models/ggml-small.en-q5_1.bin', threads: 6, language: 'en' },
+  youtube: {
+    autoUpload: false,
+    privacyStatus: 'public',
+    minUploadGapMinutes: 10,
+    pruneMaxAgeHours: 24,
+    pruneMinViews: 100,
+  },
   ui: { port: 4321 },
 };
 

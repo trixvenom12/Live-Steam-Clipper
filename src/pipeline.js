@@ -25,6 +25,25 @@ export class Queue {
     ensureDir(CLIPS);
     this.uploadDrainTimer = setInterval(() => this.drainPacedUploads(), 60_000);
     this.uploadDrainTimer?.unref?.();
+    this.pruneTimer = setInterval(() => this.pruneOldClips(), 30 * 60_000);
+    this.pruneTimer?.unref?.();
+    setTimeout(() => this.pruneOldClips(), 120_000)?.unref?.();
+  }
+
+  async pruneOldClips() {
+    try {
+      const { pruneLowViewVideos, youtubeConnected } = await import('./youtube.js');
+      if (!youtubeConnected()) return;
+      const maxAgeHours = Number(this.config.youtube?.pruneMaxAgeHours ?? 24);
+      const minViews = Number(this.config.youtube?.pruneMinViews ?? 100);
+      await pruneLowViewVideos({
+        maxAgeHours,
+        minViews,
+        onLog: (msg) => this.onLog(msg),
+      });
+    } catch (err) {
+      this.onLog(`[prune] check error: ${err.message || err}`);
+    }
   }
 
   async drainPacedUploads() {
@@ -44,7 +63,7 @@ export class Queue {
       const files = fs.readdirSync(CLIPS).filter((f) => f.endsWith('.json') && !f.endsWith('.whisper.json'));
       const candidates = files
         .map((f) => readJson(path.join(CLIPS, f), null))
-        .filter((c) => c && c.file && fs.existsSync(path.join(CLIPS, c.file)) && !c.youtube?.id)
+        .filter((c) => c && c.file && fs.existsSync(path.join(CLIPS, c.file)) && !c.youtube?.id && !c.youtube?.deleted)
         .filter((c) => {
           if (!allowedSlugs.length) return true;
           const ch = String(c.channel || '').toLowerCase().replace(/^@+/, '').trim();
