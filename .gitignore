@@ -7,8 +7,12 @@ fragments/
 *.part
 --Frag*
 .env
+token.json
+client_secrets.json
+*.db
 .venv/
 .opencode/
 *.log
 .DS_Store
 
+.venv

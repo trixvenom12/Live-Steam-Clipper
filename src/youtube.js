@@ -128,76 +128,85 @@ function hashString(str) {
   return hash;
 }
 
+export const MANDATORY_HASHTAGS = '#shorts #gtavi #gta6';
+
+export function enforceShortsTitleRules(title) {
+  const cleanTitle = String(title || '')
+    .replace(/#\w+/g, '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  const maxBaseLen = 100 - MANDATORY_HASHTAGS.length - 1;
+  const base = cleanTitle.length > maxBaseLen ? cleanTitle.slice(0, maxBaseLen).trim() : cleanTitle;
+  return `${base} ${MANDATORY_HASHTAGS}`;
+}
+
 export function generateViralShortsTitle(clip, cleanChannel, rawHook = '') {
   const text = `${clip.transcript || ''} ${clip.hook || ''} ${clip.title || ''} ${rawHook}`.toLowerCase();
   const creator = `@${cleanChannel}`;
+  const candidates = [];
+
+  const cleanSpeech = String(clip.transcript || rawHook || '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim();
+  const speechWords = cleanSpeech.split(/\s+/).filter(Boolean);
+
+  // Short quote option if punchy
+  if (speechWords.length >= 2 && speechWords.length <= 7) {
+    const quote = speechWords.slice(0, 6).join(' ');
+    candidates.push(`${creator}: "${quote.charAt(0).toUpperCase() + quote.slice(1)}" 😭`);
+    candidates.push(`${creator} Screamed At This GTA 6 Moment 😭`);
+  }
 
   // 1. Police / Chase / Cops
-  if (/\b(police|cops?|wanted|busted|sirens?|chase|stars?|5-star|five\s*star)\b/i.test(text)) {
-    const templates = [
-      `${creator} vs 5-STAR GTA 6 Police is UNHINGED 🚨 #Shorts`,
-      `Can You Escape The Cops in GTA 6?! 🚓💨 ft. ${creator} #Shorts`,
-      `GTA 6 Police AI is ACTUALLY TERRIFYING 💀 ft. ${creator} #Shorts`,
-      `${creator} BUSTED by GTA 6 Police 😭 #Shorts`,
-    ];
-    return templates[Math.abs(hashString(text)) % templates.length];
+  if (/\b(police|cops?|wanted|busted|sirens?|chase|stars?|5-star|five\s*star|arrest)\b/i.test(text)) {
+    candidates.push(
+      `${creator} vs The Most INSANE GTA 6 Police Chase 😭`,
+      `${creator} Trying To Escape The GTA 6 Cops 💀`,
+      `The GTA 6 Police Are Too Aggressive (${creator}) 🚨`,
+      `${creator} Got A 5-Star Wanted Level in GTA 6 😭`,
+    );
+  }
+  // 2. NPCs / AI behavior
+  else if (/\b(npc|pedestrian|guy|person|walk|glitch|bug|ai|traffic)\b/i.test(text)) {
+    candidates.push(
+      `${creator} Found The Funniest GTA 6 NPC 😭`,
+      `This GTA 6 NPC Had Beef With ${creator} 💀`,
+      `GTA 6 NPCs Are Actually Terrifying (${creator}) 💀`,
+      `${creator} Witnessed The Wildest GTA 6 AI Moment 😭`,
+    );
+  }
+  // 3. Car crash / physics / driving
+  else if (/\b(crash|car|drive|driving|physics|flying|flip|speed|drift|supercar)\b/i.test(text)) {
+    candidates.push(
+      `${creator} Did NOT See That GTA 6 Crash Coming 💀`,
+      `GTA 6 Car Physics Caught ${creator} Off Guard 🤯`,
+      `${creator} Trying To Drive in GTA 6 Vice City 😭`,
+      `The Vehicle Damage In GTA 6 Broke ${creator} 🤯`,
+    );
+  }
+  // 4. Combat / deaths / explosions / fail
+  else if (/\b(die|dead|died|kill|killed|shot|shoot|explosion|explode|gun|wasted|fail)\b/i.test(text)) {
+    candidates.push(
+      `Instant Regret in GTA 6 For ${creator} 💀`,
+      `This Escalated WAY Too Fast for ${creator} 😭`,
+      `${creator} Did NOT Expect That In GTA 6 🤯`,
+      `${creator}'s Funniest Death in GTA 6 😭`,
+    );
+  }
+  // 5. General relatable streamer reactions
+  else {
+    candidates.push(
+      `POV: ${creator} Playing GTA 6 For The First Time 😭`,
+      `${creator} Lost His Mind At This GTA 6 Moment 😭`,
+      `Average Day In GTA 6 Vice City For ${creator} 💀`,
+      `Rockstar Cooked With This Detail (${creator}) 🤯`,
+      `${creator} Was NOT Ready For GTA 6 Realism 💀`,
+      `${creator} Reacts To Insane GTA 6 Chaos 🤯`,
+    );
   }
 
-  // 2. Car / Driving / Crash / Stunt / Flying
-  if (/\b(crash|car|driving|stunt|flip|fly|explosion|exploded|drift|supercar|fast|traffic)\b/i.test(text)) {
-    const templates = [
-      `CRAZIEST Car Crash in GTA 6 History 🚗💥 ft. ${creator} #Shorts`,
-      `${creator} Driving in GTA 6 is CHAOTIC 💀 #Shorts`,
-      `Instant Regret in GTA 6 🚗💨 ft. ${creator} #Shorts`,
-      `GTA 6 Car Physics Are INSANE 🤯 ft. ${creator} #Shorts`,
-    ];
-    return templates[Math.abs(hashString(text)) % templates.length];
-  }
-
-  // 3. Glitch / Secret / Shocking Discovery / Graphics
-  if (/\b(secret|glitch|easter\s*egg|hidden|unreal|graphics|map|location|bug|leaked?|found)\b/i.test(text)) {
-    const templates = [
-      `${creator} Found a SECRET in GTA 6?! 🤯 #Shorts`,
-      `GTA 6 Graphics Are Actually UNREAL 🤯 ft. ${creator} #Shorts`,
-      `Is This Really in GTA 6?! 😱 ft. ${creator} #Shorts`,
-    ];
-    return templates[Math.abs(hashString(text)) % templates.length];
-  }
-
-  // 4. Wasted / Death / Fail / Regret
-  if (/\b(died|wasted|dead|killed|kill|fail|failed|shot|crying|regret|fell|oops)\b/i.test(text)) {
-    const templates = [
-      `Instant Regret in GTA 6 😭 ft. ${creator} #Shorts`,
-      `${creator} WASTED in The Dumbest Way Possible 💀 #Shorts`,
-      `He Thought He Could Survive This in GTA 6 💀 ft. ${creator} #Shorts`,
-    ];
-    return templates[Math.abs(hashString(text)) % templates.length];
-  }
-
-  // 5. Screaming / Rage / Incredulous Reaction / Hype
-  if (/\b(no\s*way|omg|oh\s*my\s*god|holy\s*shit|holy|insane|bro|wtf|screaming|what|rage|lmao)\b/i.test(text)) {
-    const templates = [
-      `${creator} CANNOT BELIEVE THIS in GTA 6 💀 #Shorts`,
-      `${creator} LOSES HIS MIND Playing GTA 6 😱 #Shorts`,
-      `The Most UNHINGED GTA 6 Reaction Ever 😭 ft. ${creator} #Shorts`,
-    ];
-    return templates[Math.abs(hashString(text)) % templates.length];
-  }
-
-  // 6. Punchy quote if available and curiosity-inducing
-  const cleanQuote = rawHook.replace(/^[",.\s]+|[",.\s]+$/g, '').trim();
-  const isDateOrMeta = /\b\d{4}-\d{2}-\d{2}\b/i.test(cleanQuote) || /\b(live|stream|part)\b/i.test(cleanQuote);
-  if (!isDateOrMeta && cleanQuote.length >= 8 && cleanQuote.length <= 42 && !/\b(all\s*right|okay|so\s*yeah)\b/i.test(cleanQuote)) {
-    return `"${cleanQuote}" 💀 ft. ${creator} #Shorts #GTA6`;
-  }
-
-  // 7. High-curiosity catch-all
-  const defaults = [
-    `The CRAZIEST Moment in GTA 6 So Far! 🤯 ft. ${creator} #Shorts`,
-    `${creator} Just Experienced Peak GTA 6 😭 #Shorts`,
-    `GTA 6 Is Already Wilding Out 💀 ft. ${creator} #Shorts`,
-  ];
-  return defaults[Math.abs(hashString(text)) % defaults.length];
+  const chosen = candidates[Math.abs(hashString(text)) % candidates.length];
+  return enforceShortsTitleRules(chosen);
 }
 
 export function buildYoutubeMetadata(clip, overrides = {}) {
@@ -209,10 +218,7 @@ export function buildYoutubeMetadata(clip, overrides = {}) {
   rawHook = rawHook.replace(/<\|endoftext\|>/g, '').trim();
 
   // Generate high-CTR viral title tailored for YouTube Shorts
-  let title = overrides.title;
-  if (!title) {
-    title = generateViralShortsTitle(clip, cleanChannel, rawHook);
-  }
+  let title = overrides.title ? enforceShortsTitleRules(overrides.title) : generateViralShortsTitle(clip, cleanChannel, rawHook);
   title = title.slice(0, 100);
 
   // YouTube Description optimized for Algorithm Engagement, Creator Credit & SEO
