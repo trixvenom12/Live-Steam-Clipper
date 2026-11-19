@@ -23,6 +23,39 @@ export class Queue {
     this.running = null;
     ensureDir(JOBS);
     ensureDir(CLIPS);
+    this.uploadDrainTimer = setInterval(() => this.drainPacedUploads(), 60_000);
+    this.uploadDrainTimer?.unref?.();
+  }
+
+  async drainPacedUploads() {
+    if (!this.config.youtube?.autoUpload && !this.config.autoUpload) return;
+    try {
+      const { youtubeConnected, uploadYoutubeClip } = await import('./youtube.js');
+      if (!youtubeConnected()) return;
+
+      const minGapMinutes = Number(this.config.youtube?.minUploadGapMinutes ?? 45);
+      const uploadTrackerFile = path.join(DATA, 'last-youtube-upload.json');
+      const lastUploadMeta = readJson(uploadTrackerFile, { lastUploadedAt: 0 });
+      const elapsedMinutes = (Date.now() - new Date(lastUploadMeta.lastUploadedAt || 0).getTime()) / 60000;
+
+      if (elapsedMinutes < minGapMinutes) return;
+
+      const files = fs.readdirSync(CLIPS).filter((f) => f.endsWith('.json') && !f.endsWith('.whisper.json'));
+      const candidates = files
+        .map((f) => readJson(path.join(CLIPS, f), null))
+        .filter((c) => c && c.file && fs.existsSync(path.join(CLIPS, c.file)) && !c.youtube?.id)
+        .sort((a, b) => (b.score || b.virality?.score || 0) - (a.score || a.virality?.score || 0));
+
+      if (!candidates.length) return;
+      const nextToUpload = candidates[0];
+      const privacy = this.config.youtube?.privacyStatus || 'public';
+      this.onLog(`[pacer] auto-uploading next top clip ${nextToUpload.id} to YouTube (${privacy})...`);
+      const yt = await uploadYoutubeClip(nextToUpload.id, { privacyStatus: privacy });
+      writeJson(uploadTrackerFile, { lastUploadedAt: new Date().toISOString(), clipId: nextToUpload.id, url: yt.url });
+      this.onLog(`[pacer] UPLOADED ${nextToUpload.id} to YouTube: ${yt.url}`);
+    } catch (err) {
+      this.onLog(`[pacer] upload failed: ${err.message || err}`);
+    }
   }
 
   jobFile(id) {
