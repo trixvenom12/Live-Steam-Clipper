@@ -158,6 +158,7 @@ export function remapWords(words, segments) {
 }
 
 function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 }, faceCenter = null, inLabel = '0:v') {
+  const assPart = assFilter ? `${assFilter},` : '';
   if (inset) {
     const { x, y, w, h } = inset;
     return [
@@ -165,7 +166,7 @@ function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 },
       '[v0]split=2[a][b]',
       `[a]crop=iw*${w}:ih*${h}:iw*${x}:ih*${y},scale=1080:672:force_original_aspect_ratio=increase,crop=1080:672,eq=saturation=1.12:contrast=1.04[face]`,
       '[b]scale=1080:1248:force_original_aspect_ratio=increase,crop=1080:1248,eq=saturation=1.12:contrast=1.04[game]',
-      `[face][game]vstack=inputs=2,${assFilter},setpts=PTS-STARTPTS[v]`,
+      `[face][game]vstack=inputs=2,${assPart}setpts=PTS-STARTPTS[v]`,
     ].join(';');
   }
   if (layout === 'crop' && faceCenter) {
@@ -174,17 +175,17 @@ function buildVideoFilter(layout, inset, assFilter, dims = { w: 1080, h: 1920 },
     const maxCropX = Math.max(0, scaledW - dims.w);
     const x = Math.max(0, Math.min(maxCropX, Math.round(faceCenter.cx * scaledW - dims.w / 2)));
     const y = 0;
-    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},eq=saturation=1.12:contrast=1.04,${assFilter},setpts=PTS-STARTPTS[v]`;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h}:${x}:${y},eq=saturation=1.12:contrast=1.04,${assPart}setpts=PTS-STARTPTS[v]`;
   }
   if (layout === 'crop') {
-    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},eq=saturation=1.12:contrast=1.04,${assFilter},setpts=PTS-STARTPTS[v]`;
+    return `[${inLabel}]setpts=PTS-STARTPTS,scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},eq=saturation=1.12:contrast=1.04,${assPart}setpts=PTS-STARTPTS[v]`;
   }
   return [
     `[${inLabel}]setpts=PTS-STARTPTS[v0]`,
     '[v0]split=2[base][fg]',
     `[base]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=increase,crop=${dims.w}:${dims.h},gblur=sigma=28,eq=brightness=-0.12[bg]`,
     `[fg]scale=${dims.w}:-2,eq=saturation=1.12:contrast=1.04[wd]`,
-    `[bg][wd]overlay=(W-w)/2:(H-h)/2,${assFilter},setpts=PTS-STARTPTS[v]`,
+    `[bg][wd]overlay=(W-w)/2:(H-h)/2,${assPart}setpts=PTS-STARTPTS[v]`,
   ].join(';');
 }
 
@@ -291,6 +292,7 @@ export async function renderClip(job, config, outDir) {
 
   ensureDir(outDir);
   const file = path.join(outDir, `${job.id}.mp4`);
+  const baseFile = path.join(dir, 'base.mp4');
 
   const smartEnabled = config.clip?.smartTrim !== false;
   const smartSegments = smartEnabled
@@ -306,11 +308,6 @@ export async function renderClip(job, config, outDir) {
   if (smartSegments && smartSegments.length > 1) {
     try {
       const targetDuration = Math.min(maxLength, smartSegments.reduce((n, s) => n + (s.end - s.start), 0));
-      const remappedWords = remapWords(snapped.words, smartSegments);
-      const assFile = path.join(dir, 'subs.ass');
-      fs.writeFileSync(assFile, buildAss(remappedWords, captions, targetDuration));
-      const assF = assFilterFor(assFile);
-
       const vFilters = [];
       const aFilters = [];
       const concatIn = [];
@@ -321,7 +318,7 @@ export async function renderClip(job, config, outDir) {
         concatIn.push(`[vseg${i}][aseg${i}]`);
       }
       const concatFilter = `${concatIn.join('')}concat=n=${smartSegments.length}:v=1:a=1[vcat][acat]`;
-      const layoutFilter = buildVideoFilter(layout, inset, assF, dims, faceCenter, 'vcat');
+      const layoutFilter = buildVideoFilter(layout, inset, null, dims, faceCenter, 'vcat');
       const aFilter = `[acat]asetpts=PTS-STARTPTS,highpass=f=80,acompressor=threshold=-18dB:ratio=3:attack=15:release=150,loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=out:st=${Math.max(0, targetDuration - 0.2).toFixed(2)}:d=0.2[a]`;
       const fullFilter = [...vFilters, ...aFilters, concatFilter, layoutFilter, aFilter].join(';');
 
@@ -332,12 +329,10 @@ export async function renderClip(job, config, outDir) {
         '-map', '[v]', '-map', '[a]',
         ...stdEncode,
         '-t', String(targetDuration),
-        '-movflags', '+faststart',
-        file,
+        baseFile,
       ]);
-      assertMedia(file);
+      assertMedia(baseFile);
       renderedDuration = targetDuration;
-      renderedWords = remappedWords;
       renderedStart = snapped.start + smartSegments[0].start;
       renderedEnd = snapped.start + smartSegments[smartSegments.length - 1].end;
       didSmart = true;
@@ -347,10 +342,7 @@ export async function renderClip(job, config, outDir) {
   }
 
   if (!didSmart) {
-    const assFile = path.join(dir, 'subs.ass');
-    fs.writeFileSync(assFile, buildAss(snapped.words, captions, duration));
-    const assF = assFilterFor(assFile);
-    const filter = buildVideoFilter(layout, inset, assF, dims, faceCenter, '0:v');
+    const filter = buildVideoFilter(layout, inset, null, dims, faceCenter, '0:v');
     const targetDuration = Math.min(maxLength, duration);
     await run(ffmpegBin(), [
       '-y', '-hide_banner', '-loglevel', 'error',
@@ -359,15 +351,50 @@ export async function renderClip(job, config, outDir) {
       '-map', '[v]', '-map', '[a]',
       ...stdEncode,
       '-t', String(targetDuration),
-      '-movflags', '+faststart',
-      file,
+      baseFile,
     ]);
-    assertMedia(file);
+    assertMedia(baseFile);
     renderedDuration = targetDuration;
-    renderedWords = snapped.words;
     renderedStart = snapped.start;
     renderedEnd = snapped.end;
   }
+
+  // --- Frame-Accurate Zero-Desync Caption Generation ---
+  // Transcribe directly from the rendered base video's audio so timestamps
+  // match the actual audio track to the millisecond with 0 PTS drift or seek offset.
+  let exactWords = renderedWords;
+  try {
+    const clipWav = path.join(dir, 'clip.wav');
+    await run(ffmpegBin(), [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-i', baseFile, '-vn', '-ac', '1', '-ar', '16000', clipWav,
+    ]);
+    assertMedia(clipWav);
+    const clipTranscript = await transcribe(clipWav, config);
+    if (clipTranscript.words?.length) {
+      exactWords = clipTranscript.words;
+      renderedWords = exactWords;
+      transcript = clipTranscript;
+    }
+  } catch (tErr) {
+    console.error(`  ! exact clip audio transcription fallback: ${tErr.message.split('\n')[0]}`);
+  }
+
+  // Burn captions onto the base video
+  const assFile = path.join(dir, 'subs.ass');
+  fs.writeFileSync(assFile, buildAss(exactWords, captions, renderedDuration));
+  const assF = assFilterFor(assFile);
+
+  await run(ffmpegBin(), [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-i', baseFile,
+    '-vf', assF,
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-c:a', 'copy',
+    '-movflags', '+faststart',
+    file,
+  ]);
+  assertMedia(file);
 
   const thumb = path.join(outDir, `${job.id}.jpg`);
   // Optional BGM mix (ducking or constant bed).
