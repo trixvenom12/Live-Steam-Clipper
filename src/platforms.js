@@ -346,7 +346,7 @@ export function parseChatFile(text) {
     const renderer = item.liveChatTextMessageRenderer || item.liveChatPaidMessageRenderer;
     if (!renderer) continue;
     const text2 = (renderer.message?.runs || []).map((r) => r.text).join('');
-    const ms = Number(obj.videoOffsetTimeMsec);
+    const ms = Number(obj.replayChatItemAction?.videoOffsetTimeMsec ?? obj.videoOffsetTimeMsec);
     if (!text2 || !Number.isFinite(ms)) continue;
     out.push({ t: ms / 1000, u: renderer.authorName?.simpleText || '', m: text2 });
   }
