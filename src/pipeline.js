@@ -35,7 +35,7 @@ export class Queue {
       const { pruneLowViewVideos, youtubeConnected } = await import('./youtube.js');
       if (!youtubeConnected()) return;
       const maxAgeHours = Number(this.config.youtube?.pruneMaxAgeHours ?? 24);
-      const minViews = Number(this.config.youtube?.pruneMinViews ?? 100);
+      const minViews = Number(this.config.youtube?.pruneMinViews ?? 500);
       await pruneLowViewVideos({
         maxAgeHours,
         minViews,

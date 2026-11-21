@@ -506,7 +506,7 @@ export async function fetchVideoViews(videoId) {
   return null;
 }
 
-export async function pruneLowViewVideos({ maxAgeHours = 24, minViews = 100, onLog = console.log } = {}) {
+export async function pruneLowViewVideos({ maxAgeHours = 24, minViews = 500, onLog = console.log } = {}) {
   ensureDir(CLIPS);
   const files = fs.readdirSync(CLIPS).filter((f) => f.endsWith('.json') && !f.endsWith('.whisper.json'));
   const results = {

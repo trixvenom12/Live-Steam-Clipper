@@ -54,7 +54,7 @@ function usage() {
     vod <url> [--top 8]            download a finished stream and clip it
     clip <file> --at 12:30 [--len 30] [--channel name]
     upload <clip-id>               upload a rendered clip to YouTube Shorts
-    prune [--hours 24] [--min-views 100]  delete underperforming YouTube uploads
+    prune [--hours 24] [--min-views 500]  delete underperforming YouTube uploads
 
   EXAMPLES
     node src/cli.js add twitch xqc
@@ -354,7 +354,7 @@ async function main() {
         return;
       }
       const maxAgeHours = Number(flags.hours || flags['max-age'] || config.youtube?.pruneMaxAgeHours || 24);
-      const minViews = Number(flags.views || flags['min-views'] || config.youtube?.pruneMinViews || 100);
+      const minViews = Number(flags.views || flags['min-views'] || config.youtube?.pruneMinViews || 500);
       console.log(`Checking YouTube uploads older than ${maxAgeHours}h with fewer than ${minViews} views...`);
       const results = await pruneLowViewVideos({ maxAgeHours, minViews, onLog: (m) => console.log(m) });
       console.log(`\nPrune summary:`);

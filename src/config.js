@@ -47,7 +47,7 @@ export const DEFAULTS = {
     privacyStatus: 'public',
     minUploadGapMinutes: 10,
     pruneMaxAgeHours: 24,
-    pruneMinViews: 100,
+    pruneMinViews: 500,
   },
   ui: { port: 4321 },
 };
